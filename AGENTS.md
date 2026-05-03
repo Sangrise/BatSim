@@ -5,6 +5,12 @@
 > the working conventions a coding agent must follow to avoid breaking
 > things or wasting time rediscovering them.
 
+**Repository**: https://github.com/Sangrise/BatSim (private, `main` branch).
+Use the standard `git add` / `git commit` / `git push` flow; commit
+messages must end with the
+`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+trailer.
+
 ---
 
 ## 1. Concept
