@@ -1,0 +1,1 @@
+[BatSim] plugins loaded: python=2 cells=2 bms=1

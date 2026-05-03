@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "batsim"
+version = "0.1.0"
+description = "PSpice-style schematic editor + Python battery & BMS simulation engine"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.6",
+    "pyqtgraph>=0.13",
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+advanced = ["pybamm>=24.1"]
+
+[project.scripts]
+batsim = "batsim.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["batsim*"]

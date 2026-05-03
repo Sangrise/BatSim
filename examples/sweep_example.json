@@ -1,0 +1,14 @@
+{
+  "runner": "battery_profile_run",
+  "base": {
+    "cell": "INR18650-25R",
+    "I_profile": 1.0,
+    "t_end": 600,
+    "dt": 1.0
+  },
+  "grid": {
+    "model_name": ["Rint", "Thevenin", "n-RC"],
+    "soc0":      [0.5, 0.8, 1.0]
+  },
+  "metric": "min_voltage"
+}

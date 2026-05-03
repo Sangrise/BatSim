@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>BatSim 매뉴얼</title>
+<style>
+  body { font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+         color: #ddd; background: #1e1e1e; padding: 18px;
+         line-height: 1.6; max-width: 1100px; margin: 0 auto; }
+  h1 { color: #9cd8ff; border-bottom: 2px solid #444; padding-bottom: 6px; }
+  h2 { color: #ffcc66; margin-top: 36px; border-bottom: 1px solid #333;
+       padding-bottom: 4px; }
+  h3 { color: #88ff88; margin-top: 22px; }
+  h4 { color: #d0d0d0; margin-top: 14px; }
+  code, pre { font-family: Consolas, monospace; }
+  code { background: #2a2a2a; color: #ffd180; padding: 1px 5px;
+         border-radius: 3px; }
+  pre  { background: #111; color: #d0d0d0; padding: 10px;
+         border-left: 3px solid #ffcc66; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 8px 0; }
+  th, td { border: 1px solid #444; padding: 5px 10px; vertical-align: top; }
+  th { background: #2c2c2c; color: #9cd8ff; }
+  kbd { background: #333; border: 1px solid #555; border-bottom-width: 2px;
+        border-radius: 4px; padding: 1px 7px; color: #fff;
+        font-family: Consolas, monospace; font-size: 0.9em; }
+  a { color: #9cd8ff; }
+  .toc { background: #222; padding: 10px 18px; border-left: 3px solid #88ff88;
+         margin-bottom: 24px; column-count: 2; column-gap: 30px; }
+  .toc ul { margin: 0; padding-left: 18px; }
+  .note  { background: #2a2a3a; border-left: 3px solid #9cd8ff;
+           padding: 8px 12px; margin: 10px 0; }
+  .warn  { background: #3a2a2a; border-left: 3px solid #ff8888;
+           padding: 8px 12px; margin: 10px 0; }
+  .tip   { background: #2a3a2a; border-left: 3px solid #88ff88;
+           padding: 8px 12px; margin: 10px 0; }
+  .langbar { float: right; font-size: 0.9em; }
+  .langbar a { margin-left: 8px; padding: 2px 8px;
+               border: 1px solid #555; border-radius: 4px;
+               text-decoration: none; }
+  .langbar a.active { background: #9cd8ff; color: #1e1e1e;
+                      border-color: #9cd8ff; }
+  figure { margin: 14px 0; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #444; border-radius: 4px;
+               background: #1e1e1e; }
+  figcaption { color: #aaa; font-size: 0.88em; margin-top: 4px;
+               font-style: italic; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .twocol figure { margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="langbar">
+  <a href="manual_en.html">English</a>
+  <a href="manual_ko.html" class="active">한국어</a>
+</div>
+
+<h1>BatSim 사용자 매뉴얼</h1>
+<p>BatSim은 PSpice 스타일의 회로 편집기와 Python 기반 배터리 / BMS
+시뮬레이션 엔진을 결합한 도구입니다. 언제든 <kbd>F1</kbd>으로 이
+매뉴얼을 다시 열 수 있습니다. GUI · 명령줄(CLI) · 확장(사용자 모델,
+셀 데이터, 외부 SOC 알고리즘)을 모두 다룹니다.</p>
+
+<figure>
+  <img src="img/main_window.png" alt="BatSim 메인 윈도우">
+  <figcaption>메인 윈도우: 부품 팔레트(좌), 회로 캔버스(중앙),
+  인스펙터(우), 그리고 시뮬레이션 후 나타나는 파형 도크(하단).</figcaption>
+</figure>
+
+<div class="toc">
+<b>목차</b>
+<ul>
+  <li><a href="#concept">1. BatSim 개요</a></li>
+  <li><a href="#layout">2. 화면 구성</a></li>
+  <li><a href="#quickstart">3. 5분 빠른 시작</a></li>
+  <li><a href="#shortcuts">4. 단축키 / 마우스 정리</a></li>
+  <li><a href="#palette">5. 부품 팔레트</a></li>
+  <li><a href="#wiring">6. 와이어 — 전체 작업 흐름</a></li>
+  <li><a href="#editing">7. 이동 · 회전 · 복사</a></li>
+  <li><a href="#blocks">8. 재사용 가능한 블록</a></li>
+  <li><a href="#inspector">9. 인스펙터(파라미터 편집)</a></li>
+  <li><a href="#battery">10. 배터리 모델과 셀 프리셋</a></li>
+  <li><a href="#bms">11. BMS 블록</a></li>
+  <li><a href="#probes">12. 프로브와 측정 신호</a></li>
+  <li><a href="#sim">13. 시뮬레이션 실행</a></li>
+  <li><a href="#waveform">14. 파형 패널</a></li>
+  <li><a href="#cli">15. 명령줄 인터페이스</a></li>
+  <li><a href="#extend">16. BatSim 확장하기</a></li>
+  <li><a href="#trouble">17. 문제 해결</a></li>
+</ul>
+</div>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="concept">1. BatSim 개요</h2>
+<p>BatSim은 두 가지 핵심을 결합합니다.</p>
+<ul>
+  <li><b>편집기</b> — 부품을 드래그해 배치하고, 와이어를 그리고,
+      파라미터를 설정합니다.</li>
+  <li><b>해석기</b> — 수정 절점 해석(MNA) 기반의 DC / 과도 해석기.
+      비선형 소자와 배터리 모델은 Newton 반복으로 처리합니다.</li>
+  <li><b>배터리 / BMS</b> — Rint, Thevenin, n-RC, SPM, DataDriven 등
+      플러그인 가능한 배터리 모델과 보호 / 밸런싱 / SOC 추정 BMS
+      블록을 함께 제공합니다.</li>
+  <li><b>CLI &amp; 스윕</b> — 모든 시뮬레이션을 GUI 없이 터미널에서
+      실행할 수 있어, 파라미터 스윕으로 최적 조건을 찾기 쉽습니다.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="layout">2. 화면 구성</h2>
+<div class="twocol">
+  <figure>
+    <img src="img/palette.png" alt="부품 팔레트">
+    <figcaption>부품 팔레트(좌측 도크).</figcaption>
+  </figure>
+  <figure>
+    <img src="img/inspector_battery.png" alt="인스펙터">
+    <figcaption>BATTERY 부품 선택 시의 인스펙터.</figcaption>
+  </figure>
+</div>
+<ul>
+  <li><b>Components</b> 도크(좌) — 부품을 드래그해 캔버스로 가져옵니다.</li>
+  <li><b>캔버스</b>(중앙) — 회로 편집 영역. 휠 = 스크롤,
+      <kbd>Ctrl</kbd>+휠 = 줌, 빈 영역 드래그 = 러버밴드 다중 선택.</li>
+  <li><b>Inspector</b> 도크(우) — 현재 선택된 부품의 파라미터.</li>
+  <li><b>Waveforms</b> 도크(하) — 첫 과도 해석 후 자동으로 보이며
+      여러 플롯 패널을 호스팅합니다.</li>
+  <li><b>Outline</b> 도크(우, 인스펙터 아래) — 현재 회로의
+      모든 부품 / 와이어 목록. 클릭하면 캔버스에서도 같이 선택되며,
+      상단 검색창에 id 또는 kind를 입력해 필터링할 수 있습니다.
+      복잡한 회로에서 붙여넣은 항목을 빠르게 다시 찾을 때 유용합니다.</li>
+  <li><b>상태바</b> — 컨텍스트 힌트, 시뮬레이션 요약.</li>
+  <li><b>메뉴</b> — File · Edit(Undo/Redo/복사/붙여넣기/블록) ·
+      Simulate · Help.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="quickstart">3. 5분 빠른 시작</h2>
+<ol>
+  <li>팔레트에서 <code>V</code>, <code>R</code>, <code>C</code>,
+      <code>GND</code>를 캔버스로 드래그합니다.</li>
+  <li>노란 핀에서 마우스를 누른 채 다른 핀까지 드래그해 와이어를
+      그립니다. 커서가 빈 공간에 있으면 <b>흐린 점선</b>, 유효한
+      타겟(핀 또는 와이어) 위에서는 <b>밝은 실선</b>으로 미리보기가
+      바뀝니다.</li>
+  <li><code>V</code>를 클릭 → 인스펙터에서 <code>V</code> 값을
+      <code>5</code>로 변경 후 <kbd>Enter</kbd>.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>R</kbd>로 시뮬레이션 다이얼로그를 열고,
+      <i>Transient</i>, <code>t_end = 0.05</code>,
+      <code>dt = 0.0005</code>로 실행.</li>
+  <li>하단 Waveforms 도크에 V(N1), V(N2), I(V1) 파형이 표시됩니다.</li>
+</ol>
+<figure>
+  <img src="img/schematic_rc.png" alt="간단한 RC 회로">
+  <figcaption>1–2단계 결과: 전압원이 직렬 RC 회로를 구동하고,
+  하나의 GND를 공유합니다.</figcaption>
+</figure>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="shortcuts">4. 단축키 / 마우스 정리</h2>
+<table>
+<tr><th>키</th><th>동작</th></tr>
+<tr><td><kbd>F1</kbd></td><td>이 매뉴얼 열기</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd> / <kbd>O</kbd> / <kbd>S</kbd></td>
+    <td>새 / 열기 / 저장 프로젝트(<code>.batsim</code>)</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>시뮬레이션 다이얼로그</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd></td>
+    <td>선택 복사 / 붙여넣기(부품 + 그 사이 와이어).
+        붙여넣은 항목은 <b>선택 상태로 유지</b>되어 곧바로 드래그하면
+        그룹째 이동합니다.</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd>
+        (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>)</td>
+    <td>되돌리기 / 다시 실행. 부품·와이어 추가/삭제, 붙여넣기,
+        회전·반전, 위치 이동까지 추적됩니다 (스택 200 단계).</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd></td>
+    <td>선택을 이름 있는 블록으로 저장</td></tr>
+<tr><td><kbd>R</kbd></td><td>선택 90° 회전 (와이어 유지)</td></tr>
+<tr><td><kbd>M</kbd></td><td>선택 좌우 반전</td></tr>
+<tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td>
+    <td>선택된 부품 또는 와이어 삭제</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>진행 중인 와이어 취소</td></tr>
+<tr><td><kbd>Ctrl</kbd>+휠</td><td>캔버스 확대 / 축소</td></tr>
+<tr><th colspan="2">마우스</th></tr>
+<tr><td>핀에서 드래그</td><td>와이어 시작</td></tr>
+<tr><td>부품 우클릭</td>
+    <td>컨텍스트 메뉴 — <i>회전 / 반전 / 삭제</i></td></tr>
+<tr><td>빈 영역 드래그</td><td>러버밴드 다중 선택</td></tr>
+<tr><td>와이어의 주황색 핸들 드래그</td>
+    <td>해당 segment를 수직 방향으로 슬라이드</td></tr>
+</table>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="palette">5. 부품 팔레트</h2>
+<table>
+<tr><th>부품</th><th>핀</th><th>주요 파라미터</th><th>비고</th></tr>
+<tr><td>R (저항)</td><td>2</td><td><code>R</code> [Ω]</td><td></td></tr>
+<tr><td>L (인덕터)</td><td>2</td><td><code>L</code> [H]</td><td></td></tr>
+<tr><td>C (커패시터)</td><td>2</td><td><code>C</code> [F]</td>
+    <td>과도 해석 초기 전압 = 0 V.</td></tr>
+<tr><td>V (전압원)</td><td>2</td><td><code>V</code> [V]</td>
+    <td>기본 DC. 핀 0 = −, 핀 1 = +.</td></tr>
+<tr><td>I (전류원)</td><td>2</td><td><code>I</code> [A]</td>
+    <td>관습적 전류 방향: 핀 0 → 핀 1(소자 내부).</td></tr>
+<tr><td>SWITCH</td><td>2</td><td><code>closed</code></td>
+    <td>불리언(인스펙터에서 체크박스).</td></tr>
+<tr><td>DIODE</td><td>2</td><td><code>Is</code>, <code>n</code>, <code>Vt</code></td>
+    <td>애노드 = 핀 0, 캐소드 = 핀 1.</td></tr>
+<tr><td>MOSFET (NMOS)</td><td>3 (D, G, S)</td>
+    <td><code>Kp</code>, <code>Vth</code>, <code>lambda</code></td>
+    <td>square-law 모델.</td></tr>
+<tr><td>BATTERY</td><td>2</td>
+    <td><code>model</code>, <code>cell</code>, <code>capacity_Ah</code>…</td>
+    <td>핀 0 = −, 핀 1 = +. §10 참조.</td></tr>
+<tr><td>PROBE</td><td>1</td><td>—</td>
+    <td>전압 프로브; 닿은 노드를 <code>V(P1)</code>로 표시.</td></tr>
+<tr><td>IPROBE</td><td>2</td><td>—</td>
+    <td>직렬로 삽입 → <code>I(IP1)</code> 신호 추가.</td></tr>
+<tr><td>GND</td><td>1</td><td>—</td>
+    <td>기준 노드. 회로당 1개 이상 필수.</td></tr>
+<tr><td>JUNCTION</td><td>1 (+ tap)</td><td>—</td>
+    <td>와이어 위에 다른 와이어를 놓으면 자동 생성(병렬 분기).</td></tr>
+</table>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="wiring">6. 와이어 — 전체 작업 흐름</h2>
+
+<h3>와이어 그리기</h3>
+<p>두 가지 방식 모두 사용 가능:</p>
+<ul>
+  <li><b>드래그</b> — 핀(부품 모서리의 작은 노란 사각형)에서
+      마우스를 누르고, 끌어, 다른 핀에서 놓습니다.</li>
+  <li><b>클릭-클릭</b> — 시작 핀을 클릭한 뒤, 종료 핀을 클릭.
+      <kbd>Esc</kbd>로 취소 가능합니다.</li>
+</ul>
+<p>드래그 중에는 직각(Manhattan) 미리보기 선이 커서를 따라옵니다.</p>
+<ul>
+  <li><b>흐린 점선</b> — 빈 공간 위; 여기서 놓아도 와이어가
+      만들어지지 <i>않습니다</i>.</li>
+  <li><b>밝은 실선</b> — 핀 또는 기존 와이어 위; 여기서 놓으면
+      연결됩니다.</li>
+</ul>
+
+<div class="warn"><b>중요:</b> 와이어는 핀 또는 기존 와이어 위에
+놓을 때만 생성됩니다. 빈 공간에서 놓으면 아무 일도 일어나지
+않습니다 — 떠 있는(floating) 와이어 끝은 존재할 수 없습니다.</div>
+
+<h3>부품 본체 회피</h3>
+<p>라우터는 다른 모든 부품을 장애물로 취급하고 필요 시 직각 우회로를
+선택합니다. 출발 / 도착 부품도 약하게 장애물로 포함되어, 와이어가
+부품 본체를 가로지르지 않고 핀을 통해서만 들어옵니다. 예를 들어
+좌측 전압원의 오른쪽 핀과 R-(R||C) 회로 우측을 연결할 때, 가운데 R을
+가로지르지 않고 아래쪽으로 우회합니다.</p>
+
+<figure>
+  <img src="img/schematic_parallel.png" alt="병렬 R||C 회로">
+  <figcaption>V — R — (R || C) — GND. 와이어가 내부 부품을 깔끔하게
+  우회합니다.</figcaption>
+</figure>
+
+<h3>꺾임(bend) 편집</h3>
+<p>와이어를 선택하면 흰색으로 변하면서 모든 내부 segment의 중간에
+<b>주황색 사각형 핸들</b>이 표시됩니다. 핸들을 드래그하면:</p>
+<ul>
+  <li>가로 segment는 세로로, 세로 segment는 가로로 슬라이드합니다.
+      그리드 간격은 20 px입니다.</li>
+  <li>핀 바로 옆 segment를 슬라이드해도 핀 위치는 고정됩니다 —
+      BatSim이 자동으로 L자 elbow를 삽입해 핀 끝점을 anchored 상태로
+      유지합니다. 따라서 <i>모든</i> bend(핀에 가장 가까운 것 포함)를
+      자유롭게 이동할 수 있습니다.</li>
+  <li>와이어 자체에서 <i>Delete</i>를 누르면 segment 하나가 아니라
+      와이어 전체가 삭제됩니다.</li>
+</ul>
+
+<h3>병렬 분기 (T-junction)</h3>
+<p>기존 와이어에서 분기를 만드는 방법:</p>
+<ol>
+  <li>핀에서 와이어를 시작합니다.</li>
+  <li>자유 끝을 <b>기존 와이어 위</b>에서 놓습니다.</li>
+  <li>BatSim이 와이어 위에 정확히 작은 <b>JUNCTION 점</b>을 만들고
+      새 와이어를 거기에 연결합니다. 원래 와이어는 <b>분할되지
+      않고</b> 단일 segment로 그대로 유지됩니다.</li>
+</ol>
+<figure>
+  <img src="img/schematic_tap.png" alt="T 분기">
+  <figcaption>R3가 R1–R2 사이 와이어에 JUNCTION 점으로 탭됩니다.
+  전기적으로 세 핀이 같은 노드를 공유합니다.</figcaption>
+</figure>
+<div class="note">JUNCTION은 항상 와이어 <i>위</i>에 있어야 합니다.
+드래그하면 호스트 와이어를 따라서만 슬라이드되며, 와이어를 벗어날
+수 없습니다. 호스트 와이어를 삭제하면 그 JUNCTION과 거기에 연결된
+와이어들도 자동 삭제됩니다.</div>
+
+<h3>와이어 교차 표시</h3>
+<p>두 와이어가 교차할 때:</p>
+<ul>
+  <li>전기적으로 같은 노드라면 <b>녹색 점</b>(JUNCTION 연결).</li>
+  <li>단순히 시각적으로만 교차한다면 작은 <b>아치 / hop</b>으로
+      표시되어 서로 분리되어 있음을 나타냅니다.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="editing">7. 이동 · 회전 · 복사</h2>
+
+<h3>이동</h3>
+<p>부품을 드래그해 옮기면 와이어가 자동으로 따라옵니다. 이동은
+그리드에 스냅됩니다.</p>
+
+<h3>회전과 반전</h3>
+<ul>
+  <li>키보드: <kbd>R</kbd> = +90° 회전, <kbd>M</kbd> = 좌우 반전.</li>
+  <li>마우스: 부품 우클릭 → <i>Rotate 90° / −90° / Mirror</i>.</li>
+  <li><b>와이어가 끊어지지 않습니다.</b> 회전 후 핀의 scene 좌표가
+      바뀌면 부품을 자동 평행이동해 와이어 끝이 핀을 따라가도록
+      합니다.</li>
+</ul>
+
+<h3>복사 / 붙여넣기</h3>
+<ul>
+  <li><kbd>Ctrl</kbd>+<kbd>C</kbd>: 선택된 부품과 그 부품들 사이의
+      와이어 전부를 복사합니다.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>V</kbd>: 현재 뷰 중앙에 새 ID로
+      붙여넣습니다.</li>
+  <li>다른 BatSim 인스턴스 사이 붙여넣기도 됩니다 — 시스템 클립보드
+      텍스트가 <code>BATSIM:</code> 접두사 뒤에 JSON 형식으로
+      저장됩니다.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="blocks">8. 재사용 가능한 블록</h2>
+<p>"블록"은 저장된 서브-회로로, 나중에 어떤 캔버스에든 다시 떨어뜨릴
+수 있습니다.</p>
+<ol>
+  <li>재사용할 부품과 와이어를 선택합니다.</li>
+  <li><b>Edit → Save selection as block…</b> (또는
+      <kbd>Ctrl</kbd>+<kbd>G</kbd>) → 이름을 입력합니다.</li>
+  <li>블록은 <code>~/.batsim/blocks/&lt;이름&gt;.json</code>에 저장됩니다.</li>
+  <li><b>Edit → Insert block</b>에 저장된 블록 목록이 나옵니다.
+      선택하면 현재 뷰 중앙에 새 ID로 붙여집니다.</li>
+  <li><b>Edit → Open blocks folder</b>로 해당 폴더를 열어 블록
+      JSON 파일을 다른 사용자와 공유할 수 있습니다.</li>
+</ol>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="inspector">9. 인스펙터</h2>
+<figure>
+  <img src="img/inspector_battery.png" alt="BATTERY 인스펙터">
+  <figcaption>BATTERY 부품 선택 시의 인스펙터 — 모델과 셀 프리셋
+  드롭다운은 레지스트리 / 데이터 파일에서 자동 채워집니다.</figcaption>
+</figure>
+<ul>
+  <li><b>숫자</b> — 입력 값은 자동으로 <code>float</code>으로
+      변환되고, 지수 표기(<code>1e-3</code>)도 가능합니다.</li>
+  <li><b>불리언</b> — 체크박스로 표시됩니다.</li>
+  <li><b>리스트 / 딕셔너리</b>(예: OCV-SOC 표) — 인스펙터에서는
+      읽기 전용. <code>data/cells/</code>의 JSON에서 직접 편집하세요.</li>
+  <li><kbd>Tab</kbd> 또는 <kbd>Enter</kbd>로 값 확정.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="battery">10. 배터리 모델과 셀 프리셋</h2>
+<p>BATTERY 부품은 <b>모델</b>(방정식 집합)과 선택적 <b>셀 프리셋</b>
+(실제 셀의 파라미터 묶음)을 결합합니다.</p>
+<table>
+<tr><th>드롭다운</th><th>의미</th></tr>
+<tr><td><b>cell (preset)</b></td>
+    <td><code>data/cells/</code> 또는
+        <code>~/.batsim/data/cells/</code>의 모든 JSON. 선택하면
+        capacity, R0, OCV 표 등이 자동 채워지며 모델 이름도 함께
+        설정됩니다. 63 Ah NCM/LFP 프리셋이 기본 포함됩니다.</td></tr>
+<tr><td><b>model</b></td>
+    <td>플러그인 레지스트리에 등록된 모델. 빌트인: Rint, Thevenin
+        (1-RC), n-RC, SPM, DataDriven.</td></tr>
+<tr><td><b>chemistry</b></td>
+    <td>Rint / Thevenin / n-RC에서 사용하는 OCV 곡선을 화학별로
+        선택합니다. <b>NCM</b>(완만한 slope, 3.50→4.20 V),
+        <b>LFP</b>(20–90% 구간 ~3.30 V plateau), <b>NCA</b>,
+        <b>LCO</b>, <b>LTO</b>(1.5–2.85 V), <b>Generic</b>.
+        DataDriven 모델은 셀의 <code>ocv_table</code>을 직접
+        사용하므로 이 값은 무시됩니다.</td></tr>
+</table>
+<h3>모델 선택 가이드</h3>
+<ul>
+  <li><b>Rint</b> — 가장 빠름. <code>V_t = OCV(SOC) − I·R0</code>.</li>
+  <li><b>Thevenin</b> — RC 한 쌍 추가, 단기 분극 표현.</li>
+  <li><b>n-RC</b> — 다중 RC 쌍(빠름 + 느림). 일반적인 BMS 검증
+      수준.</li>
+  <li><b>SPM</b> — 단순화된 단일 입자 전기화학 모델.</li>
+  <li><b>DataDriven</b> — Python 코드 없이 OCV-SOC 표와 선택적
+      RC 쌍만으로 새 셀 추가 가능.</li>
+</ul>
+
+<div class="note"><b>플로팅 회로 / 자동 접지 (BUS 권장)</b><br>
+실제 시스템처럼 <b>BUS</b> 컴포넌트(모드 = <code>Grid</code> /
+<code>PLoad</code> / <code>ILoad</code>)를 배터리에 연결하면 BUS의
+음극 핀이 자동으로 시스템 0 V 기준이 됩니다 — GND 심볼이 따로 없어도
+됩니다.<br>
+<b>Grid</b>는 변압기 너머의 전력망을 대표하는 stiff 전압원,
+<b>PLoad</b>는 정전력 부하, <b>ILoad</b>는 정전류 부하입니다.
+세 가지 모두 같은 심볼이며 인스펙터의 <code>mode</code> 드롭다운으로
+전환합니다.<br>
+BUS도 GND도 없는 옛 시트의 호환을 위해, 그런 경우에 한해 첫
+PCONST/ICONST/IPATTERN/I 또는 BATTERY의 음극이 자동 접지로
+선택됩니다.
+</div>
+
+<h3>TR — 이상적 권선비 결합기 (AC/DC 공용)</h3>
+<p>4-핀(<code>p+</code>, <code>p−</code>, <code>s+</code>,
+<code>s−</code>) 컴포넌트로, <b>V(p+)−V(p−) = n · (V(s+)−V(s−))</b>
+관계를 강제합니다 (<code>n</code> = 1차/2차 권선비). 전력 균형으로
+<code>I_s = −n · I_p</code>가 자동 성립합니다.</p>
+<div class="note">엔진은 시간영역이므로 sine 입력을 그대로 받아 AC 변환기로
+사용 가능합니다. 단, 자화/누설 인덕턴스는 모델링되지 않으며 순간
+전압 스케일러로만 동작합니다. <b>1차 측과 2차 측 각각에 GRID/BUS/GND
+기준이 있어야</b> 행렬이 풀립니다.</div>
+
+<h3>AC 체인 — GRID · TR · PCS</h3>
+<p>실제 ESS와 같은 <code>GRID(AC) → TR → PCS(AC↔DC) → BATTERY</code>
+구성을 그대로 그릴 수 있습니다.</p>
+<ul>
+  <li><b>GRID</b> — 2-핀 sine 전원. <code>V_rms</code>,
+      <code>freq</code> [Hz], <code>phase_deg</code>, <code>bias</code>
+      파라미터를 가집니다. pin 1(중성선)은 자동으로 노드 0에 접지됩니다.</li>
+  <li><b>PCS</b> — 4-핀 컨버터 (AC+, AC−, DC+, DC−). 9가지 모드를
+      지원하며 모든 충/방전 프로파일을 PCS 인스펙터에서 직접 입력합니다.
+    <table>
+      <tr><th>모드</th><th>설명</th><th>주요 파라미터</th></tr>
+      <tr><td><code>V_DC</code></td><td>DC 측 정전압 (CV 충전기)</td><td><code>V_DC_set</code></td></tr>
+      <tr><td><code>I_DC</code></td><td>DC 측 정전류 (CC 충전기)</td><td><code>I_DC_set</code></td></tr>
+      <tr><td><code>P_DC</code></td><td>DC 측 정전력</td><td><code>P_DC_set</code></td></tr>
+      <tr><td><code>CC</code></td><td>정전류 (프로파일)</td><td><code>I_set</code></td></tr>
+      <tr><td><code>CV</code></td><td>정전압 (프로파일)</td><td><code>V_set</code></td></tr>
+      <tr><td><code>CP</code></td><td>정전력 (프로파일)</td><td><code>P_set</code></td></tr>
+      <tr><td><code>CCCV</code></td><td>CC → V_max 도달 시 CV → |I|≤I_term 종지</td><td><code>I_set, V_max, I_term</code></td></tr>
+      <tr><td><code>CPCV</code></td><td>CP → V_max 도달 시 CV → |I|≤I_term 종지</td><td><code>P_set, V_max, I_term</code></td></tr>
+      <tr><td><code>CYCLE</code></td><td>스텝 리스트 순차 실행 (충방전 사이클)</td><td><code>cycle_steps</code> (JSON), <code>cycle_repeat</code></td></tr>
+    </table>
+    <p><b>부호 규약</b> — <code>+</code> = 충전, <code>−</code> = 방전.
+    <code>cycle_steps</code>는 JSON 배열로, 각 스텝마다 위 단일 모드 중
+    하나와 종지 조건(<code>max_time</code>, <code>V_max</code>,
+    <code>V_min</code>, <code>I_term</code>)을 지정합니다. 예:</p>
+    <pre>[{"mode":"CC","I":10,"V_max":3.6,"max_time":600},
+ {"mode":"REST","time":300},
+ {"mode":"CP","P":-50,"V_min":2.5,"max_time":900}]</pre>
+    <p><code>cycle_repeat=N</code>으로 N회 반복(0=무한) 가능합니다.
+    AC 측은 <code>η</code>(<code>eta</code>) 손실을 반영한 등가 정전력
+    부하로 처리합니다. PCS의 AC−, DC− 두 핀은 모두 자동 접지되며
+    <b>v1에서는 갈바닉 절연이 모델링되지 않습니다</b> — 절연이 필요한
+    케이스는 TR을 AC측에 두어 권선비 변환만 사용하세요.</p></li>
+  <li><b>dt 권장</b> — AC 한 주기당 20점 이상 → <code>dt ≤ 1/(20·f)</code>
+      (50 Hz 1 ms / 60 Hz 0.83 ms).</li>
+</ul>
+
+<figure>
+  <img src="img/schematic_battery_load.png" alt="배터리 + 부하">
+  <figcaption>BATTERY가 저항을 통해 방전됩니다. 전압 프로브가
+  부하 양단 전압을 기록합니다.</figcaption>
+</figure>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="bms">11. BMS 블록</h2>
+<p><code>batsim.bms</code> 패키지는 보호, 셀 밸런싱, SOC 추정기,
+팩 컨트롤러를 제공합니다. Python 플러그인이나 드라이버 스크립트에서
+배터리에 연결할 수 있습니다. <code>batsim list-bms</code>로 현재
+사용 가능한 블록을 확인하고, <code>~/.batsim/plugins/</code>에 직접
+추가할 수도 있습니다.</p>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="probes">12. 프로브와 측정 신호</h2>
+<ul>
+  <li><b>PROBE</b>를 임의의 노드에 떨어뜨리면 <code>V(P1)</code>
+      신호가 결과에 추가됩니다. 라벨은 P2, P3 … 로 자동 증가합니다.</li>
+  <li><b>IPROBE</b>를 와이어 중간에 삽입하면 두 핀이 0 V "션트"로
+      동작하며 전류가 <code>I(IP1)</code>로 노출됩니다.</li>
+  <li>프로브를 전혀 두지 않으면 모든 노드 전압과 전압원 전류가
+      자동으로 노출됩니다 — 빠른 탐색에는 편리하지만 큰 회로에서는
+      지나치게 많을 수 있습니다.</li>
+</ul>
+
+<h3>충/방전 패턴 컴포넌트 (배터리 테스트용)</h3>
+<ul>
+  <li><b>ICONST</b> — 정전류 부하/소스. 파라미터: <code>I</code>(A,
+      양수면 pin0→pin1 방향). 배터리에 연결하면 정전류 방전(+) 또는
+      충전(−)을 수행합니다.</li>
+  <li><b>PCONST</b> — 정전력 부하. 파라미터: <code>P</code>(W, 양수=부하).
+      비선형 요소이므로 Newton 반복으로 풀립니다 (시작 추정이 어려우면
+      <code>|V| &lt; 0.5 V</code> 구간에서 안정성을 위해 클램프).</li>
+  <li><b>IPATTERN</b> — CSV 파형 전류원. 파라미터:
+      <code>csv</code> 파일 경로(인스펙터의 「…」버튼으로 찾기 가능),
+      <code>scale</code> 배율, <code>repeat</code> 반복 여부,
+      <code>I</code> CSV가 비었을 때 사용할 기본값.<br>
+      CSV 형식은 헤더 없이 <code>time_sec, value</code> 두 열입니다.
+      <code>#</code>으로 시작하는 줄은 주석으로 무시됩니다.
+      <pre style="font-size:12px">
+# 충방전 프로파일 예시
+0,    0
+60,  -2.0     # 1분간 2A 충전
+3600, -2.0
+3660,  0
+4000,  1.0    # 1A 방전</pre></li>
+</ul>
+<div class="tip">프로브도 일반 부품처럼 이동 · 회전 · 복사 가능
+하며 와이어가 유지됩니다.</div>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="sim">13. 시뮬레이션 실행</h2>
+<p><b>Simulate → Run…</b> (또는 <kbd>Ctrl</kbd>+<kbd>R</kbd>)로
+다이얼로그를 엽니다. 다이얼로그는 선택한 모드에 대한 인라인 설명을
+함께 표시합니다.</p>
+<table>
+  <tr><th>모드</th><th>의미</th><th>출력</th></tr>
+  <tr><td><b>DC operating point</b></td>
+      <td>t=0의 바이어스 점만 계산. 캐패시터 open, 인덕터 short, AC
+          소스는 DC 값으로 고정.</td>
+      <td>노드 전압 스냅샷 (메시지 박스).</td></tr>
+  <tr><td><b>Transient</b></td>
+      <td>0→<code>t_end</code> 시간영역 적분, 스텝 <code>dt</code>.
+          비선형 소자/배터리는 Newton 반복.</td>
+      <td>전체 파형이 Waveforms 도크로 표시.</td></tr>
+</table>
+<p><b>Auto from PCS cycle</b> 버튼 — Transient에서 <code>t_end</code>
+필드 옆 버튼을 누르면 시트 위 모든 PCS의 <code>cycle_steps</code>의
+<code>max_time</code>·<code>time</code>을 합산하고 <code>cycle_repeat</code>를
+곱한 값(여러 PCS가 있으면 최댓값)을 자동 입력합니다.</p>
+<div class="note"><b>PCS cycle ≠ Run t_end</b> — cycle은 “무엇을 할지”를,
+t_end는 “얼마 동안 시뮬할지”를 정합니다. 두 값은 독립적이며,
+<code>t_end &lt; cycle 총 시간</code>이면 시뮬이 도중에 끊기고,
+크면 cycle 종료 후 PCS가 DONE 상태(I=0)로 머무릅니다.
+<code>cycle_repeat=0</code>(무한)일 때는 사용자가 t_end를 직접 정해야
+합니다.</div>
+<div class="note">배터리 전류 부호 규약:
+<b>양수 = 방전</b> (전류가 + 단자에서 나가는 방향). PCS setpoint
+부호는 별도로 <b>+ = 충전, − = 방전</b>입니다.</div>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="waveform">14. 파형 패널</h2>
+<figure>
+  <img src="img/waveform.png" alt="Waveform 도크">
+  <figcaption>한 패널이 표시된 Waveform 도크. <b>+ Add plot</b>으로
+  패널을 추가하고 각각 다른 신호를 선택할 수 있습니다.</figcaption>
+</figure>
+<ul>
+  <li><b>자동 V/I 분리</b> — 첫 시뮬레이션 직후 기본 패널이 자동으로
+      <b>Voltage 패널 + Current 패널</b> 두 개로 분리됩니다. V 신호는
+      위쪽 패널, I 신호는 아래쪽 패널에서 좌측 축으로 표시됩니다.</li>
+  <li><b>+ Add plot</b> — 새 패널 추가. 각 패널은 자체 신호 리스트를
+      가집니다.</li>
+  <li><b>Split V / I</b> — 현재 패널 구성을 버리고 자동 V/I 분리 레이
+      아웃으로 다시 만듭니다.</li>
+  <li><b>듀얼 Y축</b> — 패널 좌측 신호 리스트의 항목을 클릭할 때마다
+      상태가 <b>Off → L(좌축) → R(우축) → Off</b>로 순환합니다. 좌축은
+      실선, 우축은 점선 + 범례에 "(R)" 태그로 표시됩니다.
+      예: 같은 패널에 V와 I를 좌/우로 동시에 띄울 수 있습니다.</li>
+  <li><b>All→L</b> / <b>None</b> — 패널의 모든 신호를 좌축에 한 번에
+      배치하거나 모두 끕니다.</li>
+  <li><b>× Remove</b> — 패널 삭제(최소 1개는 항상 유지).</li>
+  <li>스플리터 바를 드래그해 패널 높이를 조절합니다.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="cli">15. 명령줄 인터페이스</h2>
+<p>모든 작업이 CLI에서도 가능해, GUI 없이 스윕 / 배치 실행을 자동
+화할 수 있습니다.</p>
+<pre>
+batsim ui                              # GUI 실행
+batsim list-models | list-cells | list-bms | list-soc
+
+batsim run myproj.batsim --t-end 60 --dt 0.001 --csv out.csv
+batsim run myproj.batsim --dc
+
+batsim cell-test --cell INR18650-25R --r-load 1.0 --t-end 3600 \
+                 --csv discharge.csv
+
+batsim sweep examples/sweep_example.json --csv sweep.csv --maximise
+
+batsim soc-eval --script examples/external_soc_example.py \
+                --algorithm CoulombCounter SimpleEKF OCVLookup \
+                --cell INR18650-25R --current 1.0 --t-end 1800 \
+                --csv soc.csv
+</pre>
+
+<h3>스윕 설정 예 (JSON)</h3>
+<pre>{
+  "runner": "battery_profile_run",
+  "base":   {"cell": "INR18650-25R", "I_profile": 1.0,
+             "t_end": 600, "dt": 1.0},
+  "grid":   {"model_name": ["Rint","Thevenin","n-RC"],
+             "soc0":       [0.5, 0.8, 1.0]},
+  "metric": "min_voltage"
+}</pre>
+<p>지원 메트릭: <code>min_voltage</code>, <code>final_soc</code>,
+<code>energy_Wh</code>. <code>--maximise</code>로 방향 반전 가능.</p>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="extend">16. BatSim 확장하기</h2>
+<p>독립적인 세 가지 확장 방법(난이도 순).</p>
+
+<h3>16.1 셀 프리셋 (데이터 파일만)</h3>
+<p><code>data/cells/MyCell.json</code> (또는 사용자별로
+<code>~/.batsim/data/cells/MyCell.json</code>):</p>
+<pre>{
+  "name": "MyCell-2Ah",
+  "model": "DataDriven",
+  "params": {
+    "capacity_Ah": 2.0, "soc0": 1.0, "R0": 0.025,
+    "RC_pairs": [[0.012, 1500], [0.020, 8000]],
+    "ocv_table": [[0.0, 2.9], [0.5, 3.7], [1.0, 4.18]]
+  }
+}</pre>
+<p>BatSim 재시작 → 인스펙터의 <b>cell (preset)</b> 드롭다운과
+<code>batsim list-cells</code>에서 보입니다.</p>
+
+<h3>16.2 새 배터리 모델 (Python 플러그인)</h3>
+<p><code>~/.batsim/plugins/</code>에 Python 파일을 떨어뜨립니다:</p>
+<pre>from batsim.models.base import BatteryModel
+from batsim.plugins.registry import register_battery_model
+
+@register_battery_model("MyChem")
+class MyChemModel(BatteryModel):
+    def __init__(self, capacity_Ah=2.0, soc0=1.0, alpha=0.5):
+        super().__init__(capacity_Ah, soc0)
+        self.alpha = alpha
+    def terminal_voltage(self, t, dt):
+        return 3.0 + self.alpha * self.soc</pre>
+<p>다른 폴더에서 가져오려면 환경 변수 <code>BATSIM_PLUGIN_PATH</code>
+를 설정하세요. <code>batsim list-models</code>로 등록 확인.</p>
+
+<h3>16.3 외부 SOC 알고리즘</h3>
+<p>임의 위치의 <code>my_soc.py</code>:</p>
+<pre>from batsim.soc import register_soc_algorithm
+
+@register_soc_algorithm("MyEKF")
+class MyEKF:
+    def __init__(self, capacity_Ah=2.5, soc0=1.0): ...
+    def step(self, I, V, dt) -&gt; float:
+        ...
+        return self.soc</pre>
+<p>데코레이터 없이도 메서드 시그니처가 정확히
+<code>step(self, I, V, dt)</code>인 클래스는 자동 등록됩니다.</p>
+<pre>batsim soc-eval --script my_soc.py \
+                --algorithm MyEKF CoulombCounter \
+                --cell INR18650-25R --current 1.0 --t-end 1800</pre>
+<p>출력 표에는 알고리즘별 RMSE와 최종 SOC가 함께 나옵니다.</p>
+
+<!-- ──────────────────────────────────────────────── -->
+<h2 id="trouble">17. 문제 해결</h2>
+<table>
+<tr><th>증상</th><th>원인 / 해결</th></tr>
+<tr><td>"Singular matrix" 시뮬레이션 오류</td>
+    <td>고립 노드 또는 GND 누락. 모든 노드가 GND까지 DC 경로를
+        가져야 합니다. 프로브로 확인하세요.</td></tr>
+<tr><td>배터리 전압 변화 없음</td>
+    <td><code>capacity_Ah</code>가 너무 크거나 <code>t_end</code>가
+        너무 짧음. <code>batsim cell-test … --csv discharge.csv</code>
+        로 확인하세요.</td></tr>
+<tr><td>와이어가 부품 본체를 가로지르는 듯 보임</td>
+    <td>이제는 발생하지 않아야 합니다 — 양쪽 끝과 중간 부품 모두
+        장애물입니다. 발생하면 <code>.batsim</code> 파일과 함께
+        제보해 주세요.</td></tr>
+<tr><td>JUNCTION이 와이어에서 떨어진 것처럼 보임</td>
+    <td>발생할 수 없습니다 — JUNCTION은 호스트 와이어 위로만
+        제한되며, 호스트 와이어가 삭제되면 함께 제거됩니다.</td></tr>
+<tr><td>새 모델 / 셀이 UI에 보이지 않음</td>
+    <td>BatSim 재시작. 데이터 파일은 <code>data/cells/</code> 또는
+        <code>~/.batsim/data/cells/</code>에 있어야 합니다.</td></tr>
+<tr><td>외부 SOC 스크립트가 등록되지 않음</td>
+    <td>데코레이터를 쓰지 않을 경우 메서드 이름과 시그니처가 정확히
+        <code>step(self, I, V, dt)</code>여야 합니다.</td></tr>
+</table>
+
+<p style="margin-top:30px; color:#888;">— BatSim · 함께 보세요:
+<code>plan.md</code>, <code>docs/EXTENDING.md</code>, 기여자용
+<code>AGENTS.md</code>.</p>
+
+</body>
+</html>

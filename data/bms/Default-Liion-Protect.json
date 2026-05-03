@@ -1,0 +1,10 @@
+{
+  "name": "Default-Liion-Protect",
+  "params": {
+    "V_over": 4.25,
+    "V_under": 2.80,
+    "I_over": 20.0,
+    "T_over": 60.0,
+    "T_under": -20.0
+  }
+}

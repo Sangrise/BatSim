@@ -1,0 +1,20 @@
+{
+  "components": [
+    {"id": "BATTERY1", "kind": "BATTERY",
+     "params": {"model": "Thevenin", "capacity_Ah": 2.5, "soc0": 1.0,
+                "R0": 0.03, "R1": 0.02, "C1": 2000.0},
+     "pins": [null, null], "pos": [-200, 0], "rotation": 0},
+    {"id": "R1", "kind": "R",
+     "params": {"R": 1.0},
+     "pins": [null, null], "pos": [100, 0], "rotation": 0},
+    {"id": "GND1", "kind": "GND",
+     "params": {}, "pins": ["0"], "pos": [-200, 100], "rotation": 0},
+    {"id": "GND2", "kind": "GND",
+     "params": {}, "pins": ["0"], "pos": [100, 100], "rotation": 0}
+  ],
+  "wires": [
+    {"a": "BATTERY1.0", "b": "R1.0"},
+    {"a": "BATTERY1.1", "b": "GND1.0"},
+    {"a": "R1.1", "b": "GND2.0"}
+  ]
+}

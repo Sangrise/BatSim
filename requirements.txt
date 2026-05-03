@@ -1,0 +1,5 @@
+PyQt6>=6.6
+pyqtgraph>=0.13
+numpy>=1.26
+scipy>=1.11
+pytest>=7.4
