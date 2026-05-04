@@ -22,7 +22,7 @@ def _ac_pcs_battery(pcs_params, t_end=2.0, dt=5e-3, R0=0.005, soc0=0.5,
             _comp("PCS1", "PCS", pcs_params, pins=4),
             _comp("Rline", "R", {"R": Rline}),
             _comp("B1", "BATTERY", {
-                "chemistry": "LFP", "model": "Thevenin",
+                "model": "Thevenin",
                 "capacity_Ah": 100.0, "soc0": soc0,
                 "R0": R0, "R1": 0.005, "C1": 100.0}),
         ],

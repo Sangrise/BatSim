@@ -192,7 +192,51 @@ def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
             _set_active(elem, "I_DC", i=0.0)
         return
 
-    # ---------------- CYCLE ----------------
+    # ---------------- CYCLE_SIMPLE (recommended cycler) ----------------
+    if mode == "CYCLE_SIMPLE":
+        I_chg = float(p.get("cyc_I_chg", 0.0))   # >0 charge current cap
+        I_dis = float(p.get("cyc_I_dis", 0.0))   # >0 discharge current cap
+        V_max = float(p.get("cyc_V_max", 4.2))
+        V_min = float(p.get("cyc_V_min", 3.0))
+        t_rest = float(p.get("cyc_t_rest", 0.0))
+        cycles = int(p.get("cyc_count", 1))
+
+        # phases: "chg_cc" -> "rest1" -> "dis_cc" -> "rest2"
+        if state["phase"] is None:
+            state["phase"] = "chg_cc"
+            state["phase_t0"] = t
+            state["cycle_n"] = 0
+
+        ph = state["phase"]
+        if ph == "chg_cc":
+            if V_max > 0 and V_dc >= V_max:
+                state["phase"] = "rest1"; state["phase_t0"] = t
+                _set_active(elem, "I_DC", i=0.0)
+            else:
+                _set_active(elem, "I_DC", i=-abs(I_chg))
+        elif ph == "rest1":
+            if (t - state["phase_t0"]) >= t_rest:
+                state["phase"] = "dis_cc"; state["phase_t0"] = t
+            _set_active(elem, "I_DC", i=0.0)
+        elif ph == "dis_cc":
+            if V_min > 0 and V_dc <= V_min:
+                state["phase"] = "rest2"; state["phase_t0"] = t
+                _set_active(elem, "I_DC", i=0.0)
+            else:
+                _set_active(elem, "I_DC", i=abs(I_dis))
+        elif ph == "rest2":
+            if (t - state["phase_t0"]) >= t_rest:
+                state["cycle_n"] += 1
+                if state["cycle_n"] >= cycles:
+                    state["phase"] = "DONE"; state["phase_t0"] = t
+                else:
+                    state["phase"] = "chg_cc"; state["phase_t0"] = t
+            _set_active(elem, "I_DC", i=0.0)
+        else:  # DONE
+            _set_active(elem, "I_DC", i=0.0)
+        return
+
+    # ---------------- CYCLE (advanced JSON-step) ----------------
     if mode == "CYCLE":
         steps = _ensure_steps(elem)
         repeat = int(p.get("cycle_repeat", 1))

@@ -286,10 +286,25 @@ class WaveformView(QWidget):
         aliases = aliases or {"voltages": {}, "currents": {}}
 
         data: dict[str, list[float]] = {}
-        for pid, node in aliases.get("voltages", {}).items():
-            arr = V.get(node)
-            if arr is not None:
+        for pid, info in aliases.get("voltages", {}).items():
+            if isinstance(info, tuple):
+                npos, nneg = info
+                arr_p = V.get(npos)
+                if arr_p is None:
+                    continue
+                if nneg in (None, "0"):
+                    arr = list(arr_p)
+                else:
+                    arr_n = V.get(nneg)
+                    if arr_n is None:
+                        arr = list(arr_p)
+                    else:
+                        arr = [a - b for a, b in zip(arr_p, arr_n)]
                 data[f"V({pid})"] = arr
+            else:
+                arr = V.get(info)
+                if arr is not None:
+                    data[f"V({pid})"] = arr
         for pid, vsname in aliases.get("currents", {}).items():
             arr = I.get(vsname)
             if arr is not None:

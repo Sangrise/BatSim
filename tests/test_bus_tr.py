@@ -17,7 +17,7 @@ def test_bus_grid_drives_battery():
         "components": [
             _comp("G1", "BUS", {"mode": "Grid", "V": 50.0}),
             _comp("Rc", "R", {"R": 0.5}),  # cable
-            _comp("B1", "BATTERY", {"chemistry": "NCM", "model": "Thevenin",
+            _comp("B1", "BATTERY", {"model": "Thevenin",
                                      "capacity_Ah": 100.0, "soc0": 0.2,
                                      "R0": 0.05, "R1": 0.01, "C1": 100.0}),
         ],
@@ -107,7 +107,7 @@ def test_bus_anchor_priority_over_battery():
     """When both BUS and BATTERY are present, BUS must be the GND anchor."""
     g = {
         "components": [
-            _comp("B1", "BATTERY", {"chemistry": "LFP", "model": "Thevenin",
+            _comp("B1", "BATTERY", {"model": "Thevenin",
                                      "capacity_Ah": 10.0, "soc0": 0.5,
                                      "R0": 0.01, "R1": 0.01, "C1": 100.0}),
             _comp("G1", "BUS", {"mode": "Grid", "V": 12.0}),

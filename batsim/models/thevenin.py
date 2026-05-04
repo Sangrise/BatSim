@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from .base import BatteryModel, default_ocv, chemistry_ocv
+from .base import BatteryModel, default_ocv, ocv_from_table
 
 
 class TheveninModel(BatteryModel):
@@ -13,15 +13,17 @@ class TheveninModel(BatteryModel):
 
     def __init__(self, capacity_Ah: float = 2.5, soc0: float = 1.0,
                  R0: float = 0.03, R1: float = 0.02, C1: float = 2000.0,
-                 chemistry: str = "NCM",
-                 ocv=None):
+                 ocv=None, ocv_table=None):
         super().__init__(capacity_Ah, soc0)
         self.R0 = R0
         self.R1 = R1
         self.C1 = C1
-        self.chemistry = chemistry
-        self._ocv = ocv if ocv is not None else (
-            chemistry_ocv(chemistry) if chemistry else default_ocv)
+        if ocv is not None:
+            self._ocv = ocv
+        elif ocv_table:
+            self._ocv = ocv_from_table(ocv_table)
+        else:
+            self._ocv = default_ocv
         self._I = 0.0
         self._V_rc = 0.0
 

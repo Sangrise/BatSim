@@ -9,19 +9,58 @@ from PyQt6.QtWidgets import (QDialog, QFormLayout, QLineEdit, QDialogButtonBox,
 
 
 def _estimate_pcs_total_time(netlist) -> float | None:
-    """Sum of cycle step durations × cycle_repeat across all PCS elements.
+    """Estimate total simulation time covering all PCS cycle modes.
 
-    Returns the maximum among all PCS components (so t_end covers them
-    all), or None if none specifies a finite cycle."""
+    Supports:
+      - CYCLE_SIMPLE — chg_cc + chg_cv + rest + dis_cc + rest, ×N cycles.
+        chg_cc time is approximated from capacity_Ah / I_chg of the first
+        battery on the same DC bus (heuristic) and chg_cv defaults to 1 h
+        of taper budget.
+      - CYCLE — sum of step max_time/time × cycle_repeat.
+
+    Returns the maximum across all PCS components, or None if none
+    specifies a finite cycle."""
     if netlist is None:
         return None
+    comps = list(getattr(netlist, "components", []) or [])
+    # Find any battery capacity to size the charge/discharge phases.
+    cap_Ah = None
+    for c in comps:
+        if c.get("kind") == "BATTERY":
+            try:
+                cap_Ah = float(c.get("params", {}).get("capacity_Ah", 0.0))
+                if cap_Ah > 0:
+                    break
+            except Exception:
+                pass
+
     best = 0.0
     found = False
-    for c in getattr(netlist, "components", []) or []:
+    for c in comps:
         if c.get("kind") != "PCS":
             continue
         params = c.get("params", {})
         mode = params.get("mode", "")
+
+        if mode == "CYCLE_SIMPLE":
+            try:
+                I_chg = abs(float(params.get("cyc_I_chg", 0.0)))
+                I_dis = abs(float(params.get("cyc_I_dis", 0.0)))
+                t_rest = float(params.get("cyc_t_rest", 0.0))
+                cycles = int(params.get("cyc_count", 1) or 1)
+            except Exception:
+                continue
+            # Per-cycle estimate.  Use 1.2× nominal CC time as a budget for
+            # SOC excursions, plus a fixed CV taper budget of 1 h.
+            t_chg_cc = (3600.0 * cap_Ah / I_chg * 1.2) if (cap_Ah and I_chg > 0) else 3600.0
+            t_chg_cv = 3600.0
+            t_dis_cc = (3600.0 * cap_Ah / I_dis * 1.2) if (cap_Ah and I_dis > 0) else 3600.0
+            per = t_chg_cc + t_chg_cv + t_rest + t_dis_cc + t_rest
+            total = per * max(cycles, 1)
+            if total > 0:
+                found = True; best = max(best, total)
+            continue
+
         if mode != "CYCLE":
             continue
         raw = params.get("cycle_steps", "[]")
@@ -38,11 +77,10 @@ def _estimate_pcs_total_time(netlist) -> float | None:
                 pass
         repeat = int(params.get("cycle_repeat", 1) or 1)
         if repeat <= 0:
-            continue  # infinite — user must set t_end manually
+            continue
         total *= repeat
         if total > 0:
-            found = True
-            best = max(best, total)
+            found = True; best = max(best, total)
     return best if found else None
 
 

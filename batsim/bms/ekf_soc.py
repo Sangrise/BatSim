@@ -20,8 +20,8 @@ class EKFSocEstimator:
         self.R = np.array([[sigma_meas]])
 
     def _ocv(self, soc: float) -> float:
-        from batsim.models.base import chemistry_ocv
-        return chemistry_ocv("NCM")(soc)
+        from batsim.models.base import default_ocv
+        return default_ocv(soc)
 
     def _docv_dsoc(self, soc: float, eps: float = 1e-4) -> float:
         return (self._ocv(soc + eps) - self._ocv(soc - eps)) / (2 * eps)

@@ -1,0 +1,8 @@
+key,value
+name,NCM-50Ah-csv
+model,DataDriven
+manufacturer,Generic
+chemistry,NCM
+capacity_Ah,50.0
+soc0,1.0
+R0,0.001

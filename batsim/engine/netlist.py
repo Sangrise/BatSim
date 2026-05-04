@@ -213,11 +213,31 @@ def probe_map(graph: dict) -> dict:
             parent.setdefault(anchor_pin, anchor_pin)
             union(anchor_pin, "0")
 
-    voltages: dict[str, str] = {}
+    voltages: dict = {}
     currents: dict[str, str] = {}
+    # Pre-compute the membership of every node-set so we can detect a
+    # PROBE whose negative lead is unconnected (= measure vs GND).
+    members: dict[str, set[str]] = {}
+    for label in list(parent.keys()):
+        r = find(label)
+        members.setdefault(r, set()).add(label)
     for c in graph.get("components", []):
         if c["kind"] == "PROBE":
-            voltages[c["id"]] = find(f"{c['id']}.0")
+            pins = c.get("pins", [])
+            if len(pins) >= 2:
+                n_pos = find(f"{c['id']}.0")
+                neg_label = f"{c['id']}.1"
+                n_neg = find(neg_label) if neg_label in parent else neg_label
+                # Treat pin1 as ground when it is unconnected (= the
+                # only member of its set is itself, meaning no wire ever
+                # touched it).
+                if len(members.get(n_neg, set())) <= 1 and n_neg != "0":
+                    voltages[c["id"]] = (n_pos, "0")
+                else:
+                    voltages[c["id"]] = (n_pos, n_neg)
+            else:
+                # Legacy single-pin PROBE → still single-ended vs GND
+                voltages[c["id"]] = (find(f"{c['id']}.0"), "0")
         elif c["kind"] == "IPROBE":
             currents[c["id"]] = c["id"]
     return {"voltages": voltages, "currents": currents}

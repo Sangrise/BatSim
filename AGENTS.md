@@ -196,19 +196,34 @@ Key invariants enforced in code (don't break these):
   max across all PCS components.  PCS cycles describe *what* to do;
   `t_end` decides *how long* to run — they're independent.
   `cycle_repeat=0` (infinite) requires manual `t_end`.
-* Voltage probes (`PROBE` → V(P1)) and current probes
-  (`IPROBE` → I(IP1)).
+* Voltage probes (`PROBE` → V(P1)). `PROBE` is differential — wire both
+  pins to the two nodes you want to measure (V_pos − V_neg). Floating
+  pin1 falls back to GND.
+* Current probes (`IPROBE` → I(IP1)). **Single-clamp UX**: drag IPROBE
+  onto an existing wire — it auto-splits the wire and clamps on. Empty-
+  space drops are refused. Symbol is two concentric circles + "A"/"I"
+  label, no visible pins/stubs. Internally still a 0-V source, hence
+  `pins=2` in the catalog.
 * If no probe placed, all node voltages and V-source currents exposed.
 
 ### Battery / BMS
 * Built-in models: Rint, Thevenin, n-RC, SPM, DataDriven.
-* **Chemistry-aware OCV** — `chemistry` parameter on Rint/Thevenin/n-RC
-  selects an OCV table from `OCV_TABLES` in `batsim/models/base.py`
-  (NCM, NCA, LCO, LFP, LTO, Generic). LFP shows the characteristic
-  ~3.30 V plateau, LTO sits in 1.5–2.85 V, etc.  Inspector renders the
-  parameter as a dropdown.
-* Cell presets discovered from `data/cells/*.json` and
-  `~/.batsim/data/cells/*.json`.  63 Ah NCM/LFP presets ship in-tree.
+* **No built-in chemistry presets.** Real cell data must be supplied
+  via a CSV folder under `data/cells/<your-cell>/` (see
+  `batsim/plugins/loader.py`):
+  - `meta.csv`  key/value (name, model, capacity_Ah, R0, ...)
+  - `ocv.csv`   header `soc,V_oc` → params["ocv_table"]
+  - `ocv_chg.csv`, `ocv_dch.csv` (optional — hysteresis)
+  - `rc_pairs.csv` header `R,C` → params["RC_pairs"]
+  - any other `*.csv` → preserved under `params["_extra"][<stem>]`
+  Folders are auto-discovered on every CLI/UI start; the user can drop
+  in new cells with no code change.
+* Models accept `ocv_table` (list of `[soc, V_oc]`) directly; `chemistry`
+  is no longer accepted (silently dropped on legacy graphs).
+* `default_ocv` in `models/base.py` is a generic 3.0–4.2 V fallback for
+  cells without an OCV table — qualitative only, NOT chemistry-accurate.
+* Sole shipping cell: `data/cells/NCM-50Ah-csv/`. Add your own folders
+  alongside it.
 * Plug-in models from `batsim/plugins/builtin/` and
   `~/.batsim/plugins/` (override via `BATSIM_PLUGIN_PATH`).
 * BMS package: protection, balancer, EKF SOC, controller, pack.
@@ -269,10 +284,11 @@ peak = `V_rms·√2`, ω = `2π·freq`.  Pin 1 (neutral) is auto-grounded.
 | 2   | DC + |
 | 3   | DC − (auto-anchored to 0) |
 
-`mode` parameter (9 modes — controller in `engine/pcs_control.py`):
+`mode` parameter (10 modes — controller in `engine/pcs_control.py`):
 
-| mode    | description | key params |
-|---------|-------------|------------|
+| mode           | description | key params |
+|----------------|-------------|------------|
+| `CYCLE_SIMPLE` | **Recommended cycler.** chg_cc → rest → dis_cc → rest, repeat × `cyc_count`. Charge until V_pack≥cyc_V_max, discharge until V_pack≤cyc_V_min. | `cyc_I_chg, cyc_I_dis, cyc_V_max, cyc_V_min, cyc_t_rest, cyc_count` |
 | `V_DC`  | Stiff DC voltage source | `V_DC_set` |
 | `I_DC`  | Stiff DC current injector | `I_DC_set` |
 | `P_DC`  | Constant DC power | `P_DC_set` |
@@ -281,10 +297,26 @@ peak = `V_rms·√2`, ω = `2π·freq`.  Pin 1 (neutral) is auto-grounded.
 | `CP`    | Constant power (profile) | `P_set` |
 | `CCCV`  | CC until `V≥V_max`, then CV; terminate when `|I|≤I_term` | `I_set, V_max, I_term` |
 | `CPCV`  | CP until `V≥V_max`, then CV; terminate when `|I|≤I_term` | `P_set, V_max, I_term` |
-| `CYCLE` | Step list executed in order | `cycle_steps` (JSON), `cycle_repeat` |
+| `CYCLE` | Advanced JSON-step list executed in order | `cycle_steps` (JSON), `cycle_repeat` |
 
-**Sign convention** — `+` = charging (PCS sources current INTO DC+),
-`−` = discharging.  Applies to `I_set / I_DC_set / P_set / P_DC_set`.
+**Sign convention (user-facing)** — `+` = charging, `−` = discharging
+for `I_set / I_DC_set / P_set / P_DC_set` and `cyc_I_chg`.
+
+**Internal note** (don't break this) — `_set_active(elem, "I_DC", i=...)`
+uses the *MNA stamp* sign: charging is `i = -|I_chg|` because
+`_stamp_current(b, n_from=DC-, n_to=DC+, I)` injects `+I` into DC+ in
+the network's KCL but the resulting battery `vs_current` (positive =
+discharge by battery convention) ends up with the opposite sign. The
+CYCLE_SIMPLE / CYCLE handlers already handle the flip; only touch this
+if you also re-derive the stamp.
+
+**Why CYCLE_SIMPLE has no CV taper** — the battery V-source stamp uses
+the previous step's `self._I` for `V_t = OCV − I·R0 − V_rc`. Forcing
+`V_DC = V_max` while OCV is also at saturation creates a fixed point
+where `I` never tapers to `I_term`, so the cycle never advances. The
+simple CC↔rest cycler avoids this entirely. Re-add CV only if the
+battery model exposes a stable terminal_voltage decoupled from
+`self._I`.
 
 **`cycle_steps` JSON** — list of dicts; each step has a `mode` (any
 single-mode name above) plus that mode's params and an optional
@@ -399,12 +431,20 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
 * `tap_pin` (string `"R1.1"`) is for serialisation;
   `tap_wire` (object reference) is the runtime link. Re-resolve
   `tap_wire` from `tap_pin` after every `load_graph`.
-* `pin_at` snaps to the nearest pin within `PIN_HIT_RADIUS`; tests
+* `pin_at` snaps to the nearest pin within `PIN_HIT_RADIUS = 18`; tests
   that drop a wire end "on a wire" should use a coordinate clearly
   beyond that radius from any pin.
+* `IPROBE` is special: catalog `pins=2` (engine still treats it as a
+  0-V source for current measurement) but `ComponentItem` suppresses
+  pin dots and pin clicks, and `SchematicScene.add_component` refuses
+  empty-space drops. The user must drop IPROBE *onto an existing wire*
+  → `_insert_iprobe_on_wire` auto-splits and clamps it on. Don't re-
+  enable pin clicks for IPROBE without a strong reason.
 * `Inspector` shows model dropdowns by reading the plug-in registry,
   not by hard-coded lists. Adding a model in `~/.batsim/plugins/` is
-  enough — restart only required for cells in `data/cells/`.
+  enough; cells under `data/cells/<name>/` are picked up by every
+  `discover()` call (CLI startup + UI `refresh_if_changed`) — no
+  restart required.
 
 ### 5.6 Where to look first when something breaks
 | Symptom                                 | Look at                                |

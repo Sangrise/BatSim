@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import Qt, QPointF, QTimer
 from PyQt6.QtGui import QAction, QPainter, QKeySequence, QShortcut, QClipboard
 from PyQt6.QtWidgets import (QMainWindow, QGraphicsView, QDockWidget, QFileDialog,
                              QMessageBox, QToolBar, QApplication, QInputDialog)
@@ -21,6 +21,7 @@ from batsim.ui.help_dialog import HelpDialog
 from batsim.engine.netlist import from_graph, probe_map
 from batsim.engine.nonlinear import solve_dc, solve_transient
 from batsim.plugins.registry import make_battery
+from batsim.plugins import refresh_if_changed
 from batsim.io.project import save_project, load_project
 
 
@@ -184,9 +185,35 @@ class MainWindow(QMainWindow):
         em.addAction(self._act("Open blocks folder", self.open_blocks_folder))
         sim = self.menuBar().addMenu("&Simulate")
         sim.addAction(self._act("Run…", self.run_simulation, "Ctrl+R"))
+        sim.addSeparator()
+        sim.addAction(self._act("Reload cell library", self.reload_cell_library, "F5"))
         helpm = self.menuBar().addMenu("&Help")
         helpm.addAction(self._act("Manual", self.show_help, "F1"))
         helpm.addAction(self._act("About", self.show_about))
+
+        # Background polling so a freshly-added cell folder appears
+        # without restart even if the user never opens the Simulate menu.
+        self._cell_watch_timer = QTimer(self)
+        self._cell_watch_timer.setInterval(5000)
+        self._cell_watch_timer.timeout.connect(self._poll_cell_library)
+        self._cell_watch_timer.start()
+
+    def reload_cell_library(self):
+        from batsim.plugins import discover, list_cells
+        n = discover()
+        msg = (f"Cell library reloaded — {len(list_cells())} cells "
+               f"({n['cells']} entries from disk)")
+        self.statusBar().showMessage(msg, 4000)
+        if self.inspector is not None and self.inspector._comp is not None:
+            self.inspector.set_component(self.inspector._comp)
+
+    def _poll_cell_library(self):
+        if refresh_if_changed():
+            from batsim.plugins import list_cells
+            self.statusBar().showMessage(
+                f"셀 라이브러리 자동 갱신 — {len(list_cells())} cells", 3000)
+            if self.inspector is not None and self.inspector._comp is not None:
+                self.inspector.set_component(self.inspector._comp)
 
     def show_help(self):
         if self._help_dialog is None:

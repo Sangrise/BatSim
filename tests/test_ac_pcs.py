@@ -80,7 +80,7 @@ def test_full_ac_chain_grid_tr_pcs_battery():
             _comp("T1", "TR", {"n": 2.0}, pins=4),
             _comp("PCS1", "PCS", {"mode": "V_DC", "V_DC_set": 180.0,
                                   "eta": 0.97}, pins=4),
-            _comp("B1", "BATTERY", {"chemistry": "LFP", "model": "Thevenin",
+            _comp("B1", "BATTERY", {"model": "Thevenin",
                                      "capacity_Ah": 100.0, "soc0": 0.5,
                                      "R0": 0.005, "R1": 0.01, "C1": 100.0}),
             _comp("Rline", "R", {"R": 1.0}),  # 1Ω limiter so I ~ a few A

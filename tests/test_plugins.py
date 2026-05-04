@@ -19,13 +19,12 @@ def test_builtin_models_registered():
 
 def test_data_cells_discovered():
     discover()  # scans repo data/
-    assert "INR18650-25R" in CELL_LIBRARY
-    assert "LFP-26650-3Ah" in CELL_LIBRARY
+    assert "NCM-50Ah-csv" in CELL_LIBRARY
 
 
 def test_make_battery_from_cell():
     discover()
-    bat = make_battery(cell="INR18650-25R")
+    bat = make_battery(cell="NCM-50Ah-csv")
     v0 = bat.terminal_voltage(0, None)
     assert 4.0 < v0 < 4.3
 
@@ -59,3 +58,31 @@ def test_data_only_plugin_via_tmp(monkeypatch):
     assert "TmpCell-X" in CELL_LIBRARY
     bat = make_battery(cell="TmpCell-X")
     assert abs(bat.terminal_voltage(0, None) - 3.6) < 1e-9  # OCV(0.5)
+
+
+def test_csv_folder_cell_builtin():
+    """CSV-folder cell shipped under data/cells/<name>/ is discovered and
+    builds a working battery model."""
+    discover()
+    assert "NCM-50Ah-csv" in CELL_LIBRARY
+    bat = make_battery(cell="NCM-50Ah-csv")
+    v0 = bat.terminal_voltage(0, None)
+    assert 4.0 < v0 < 4.3   # SOC=1 → ~4.20 V
+
+
+def test_csv_folder_cell_user_dir(monkeypatch):
+    """A user can drop a CSV-folder cell under ~/.batsim/data/cells/<name>/."""
+    base = Path(tempfile.mkdtemp(prefix="batsim_csvcell_"))
+    folder = base / ".batsim" / "data" / "cells" / "TmpCsvCell"
+    folder.mkdir(parents=True)
+    (folder / "meta.csv").write_text(
+        "key,value\nname,TmpCsvCell\nmodel,DataDriven\n"
+        "capacity_Ah,1.0\nsoc0,0.5\nR0,0.01\n", encoding="utf-8")
+    (folder / "ocv.csv").write_text(
+        "soc,V_oc\n0.0,3.0\n1.0,4.2\n", encoding="utf-8")
+    (folder / "rc_pairs.csv").write_text("R,C\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", lambda: base)
+    discover()
+    assert "TmpCsvCell" in CELL_LIBRARY
+    bat = make_battery(cell="TmpCsvCell")
+    assert abs(bat.terminal_voltage(0, None) - 3.6) < 1e-9

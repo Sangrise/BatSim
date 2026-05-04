@@ -66,7 +66,7 @@ def cmd_list_soc(args):
 
 def cmd_run(args):
     from batsim.io.project import load_project
-    from batsim.engine.netlist import from_graph
+    from batsim.engine.netlist import from_graph, probe_map
     from batsim.engine.nonlinear import solve_dc, solve_transient
     from batsim.plugins.registry import make_battery
 
@@ -88,11 +88,11 @@ def cmd_run(args):
         return 0
 
     res = solve_transient(nl, t_end=args.t_end, dt=args.dt)
+    aliases = probe_map(graph)
     if args.csv:
-        _write_transient_csv(res, args.csv)
+        _write_transient_csv(res, args.csv, aliases=aliases)
         print(f"wrote {args.csv}")
     else:
-        # Print last sample for each signal
         print(f"t_end = {res['t'][-1]:.6f} s, steps = {len(res['t'])}")
         for n, arr in res["V"].items():
             print(f"  V({n})[end] = {arr[-1]:.6f}")
@@ -101,11 +101,53 @@ def cmd_run(args):
     return 0
 
 
-def _write_transient_csv(res, path):
+def _write_transient_csv(res, path, aliases=None):
     import csv
-    cols = ["t"] + [f"V({n})" for n in res["V"]] + [f"I({n})" for n in res["I"]]
-    rows = list(zip(res["t"], *(res["V"][n] for n in res["V"]),
-                    *(res["I"][n] for n in res["I"])))
+    aliases = aliases or {"voltages": {}, "currents": {}}
+    cols = ["t"]
+    series: list = []
+    used_v_nodes: set[str] = set()
+    used_i_names: set[str] = set()
+    for pid, info in aliases.get("voltages", {}).items():
+        if isinstance(info, tuple):
+            npos, nneg = info
+            arr_p = res["V"].get(npos)
+            if arr_p is None:
+                continue
+            if nneg in (None, "0"):
+                arr = list(arr_p)
+            else:
+                arr_n = res["V"].get(nneg)
+                arr = list(arr_p) if arr_n is None \
+                    else [a - b for a, b in zip(arr_p, arr_n)]
+            cols.append(f"V({pid})")
+            series.append(arr)
+            used_v_nodes.add(npos)
+            if nneg not in (None, "0"):
+                used_v_nodes.add(nneg)
+        else:
+            arr = res["V"].get(info)
+            if arr is not None:
+                cols.append(f"V({pid})")
+                series.append(arr)
+                used_v_nodes.add(info)
+    for pid, vsname in aliases.get("currents", {}).items():
+        arr = res["I"].get(vsname)
+        if arr is not None:
+            cols.append(f"I({pid})")
+            series.append(arr)
+            used_i_names.add(vsname)
+    for n, arr in res["V"].items():
+        if n in used_v_nodes:
+            continue
+        cols.append(f"V({n})")
+        series.append(arr)
+    for n, arr in res["I"].items():
+        if n in used_i_names:
+            continue
+        cols.append(f"I({n})")
+        series.append(arr)
+    rows = list(zip(res["t"], *series))
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)

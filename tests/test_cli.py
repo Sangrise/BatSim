@@ -37,7 +37,7 @@ def test_cli_list_models(capsys):
 def test_cli_list_cells(capsys):
     rc, out = run_cli(["list-cells"], capsys)
     assert rc == 0
-    assert "INR18650-25R" in out
+    assert "NCM-50Ah-csv" in out
 
 
 def test_cli_list_soc(capsys):
@@ -49,7 +49,7 @@ def test_cli_list_soc(capsys):
 
 def test_cli_cell_test(capsys, tmpdir_safe):
     csvp = tmpdir_safe / "out.csv"
-    rc, out = run_cli(["cell-test", "--cell", "INR18650-25R",
+    rc, out = run_cli(["cell-test", "--cell", "NCM-50Ah-csv",
                        "--r-load", "10.0", "--t-end", "5.0", "--dt", "0.5",
                        "--csv", str(csvp)], capsys)
     assert rc == 0
@@ -68,7 +68,7 @@ def test_cli_sweep(capsys, tmpdir_safe):
     cfg = tmpdir_safe / "sweep.json"
     cfg.write_text("""{
       "runner": "battery_profile_run",
-      "base":   {"cell": "INR18650-25R", "I_profile": 1.0,
+      "base":   {"cell": "NCM-50Ah-csv", "I_profile": 1.0,
                  "t_end": 5.0, "dt": 0.5},
       "grid":   {"model_name": ["Rint", "Thevenin"]},
       "metric": "min_voltage"
@@ -84,7 +84,7 @@ def test_cli_soc_eval_with_external_script(capsys):
     rc, out = run_cli(["soc-eval", "--script", str(script),
                        "--algorithm", "CoulombCounter", "SimpleEKF",
                        "SmoothedCC", "OCVLookup",
-                       "--cell", "INR18650-25R",
+                       "--cell", "NCM-50Ah-csv",
                        "--current", "0.5", "--t-end", "120", "--dt", "1.0"],
                       capsys)
     assert rc == 0

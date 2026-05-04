@@ -13,7 +13,7 @@ from .crossings import CrossingsOverlay
 
 
 GRID = 20
-PIN_HIT_RADIUS = 12  # scene-units tolerance when matching cursor to a pin
+PIN_HIT_RADIUS = 18  # scene-units tolerance when matching cursor to a pin
 
 
 class SchematicScene(QGraphicsScene):
@@ -61,13 +61,86 @@ class SchematicScene(QGraphicsScene):
         return f"{kind}{self._uid}"
 
     # --- API used by view/palette ---
-    def add_component(self, kind: str, scene_pos: QPointF) -> ComponentItem:
+    def add_component(self, kind: str, scene_pos: QPointF) -> ComponentItem | None:
+        # IPROBE only makes sense clamped onto a wire — drop it on a wire
+        # and we auto-split that wire to insert it inline.  Dropping in
+        # empty space is a no-op so the user doesn't end up with an
+        # unconnected probe that produces zero current.
+        if kind == "IPROBE":
+            wire = self._wire_at(scene_pos)
+            if wire is None:
+                return None
+            return self._insert_iprobe_on_wire(wire, scene_pos)
         spec = CATALOG[kind]
         cid = self.next_id(kind)
         item = ComponentItem(cid, kind, spec)
         item.setPos(self.snap(scene_pos))
         self.addItem(item)
         self._components.append(item)
+        self.graphChanged.emit()
+        return item
+
+    def _segment_orientation_at(self, wire: WireItem,
+                                scene_pos: QPointF) -> str:
+        """Return 'h' or 'v' based on the wire segment closest to scene_pos."""
+        path = wire._path
+        n = path.elementCount()
+        best_d = float("inf")
+        best = "h"
+        for i in range(n - 1):
+            a = path.elementAt(i); b = path.elementAt(i + 1)
+            ax, ay, bx, by = a.x, a.y, b.x, b.y
+            if abs(ay - by) < 0.5:
+                x = max(min(scene_pos.x(), max(ax, bx)), min(ax, bx))
+                d = ((x - scene_pos.x()) ** 2
+                     + (ay - scene_pos.y()) ** 2) ** 0.5
+                horiz = True
+            elif abs(ax - bx) < 0.5:
+                y = max(min(scene_pos.y(), max(ay, by)), min(ay, by))
+                d = ((ax - scene_pos.x()) ** 2
+                     + (y - scene_pos.y()) ** 2) ** 0.5
+                horiz = False
+            else:
+                continue
+            if d < best_d:
+                best_d = d
+                best = "h" if horiz else "v"
+        return best
+
+    def _insert_iprobe_on_wire(self, wire: WireItem,
+                               scene_pos: QPointF) -> ComponentItem | None:
+        """Place an IPROBE inline on `wire`: remove the wire and replace
+        with two new wires (a → IPROBE.in, IPROBE.out → b)."""
+        orient = self._segment_orientation_at(wire, scene_pos)
+        rotation = 0.0 if orient == "h" else 90.0
+
+        spec = CATALOG["IPROBE"]
+        cid = self.next_id("IPROBE")
+        item = ComponentItem(cid, "IPROBE", spec)
+        item.setPos(self.snap(scene_pos))
+        item.setRotation(rotation)
+        self.addItem(item)
+        self._components.append(item)
+
+        a_comp, a_pin = wire.a_comp, wire.a_pin
+        b_comp, b_pin = wire.b_comp, wire.b_pin
+        a_pos = a_comp.pin_scene_pos(a_pin)
+        p0 = item.pin_scene_pos(0)
+        p1 = item.pin_scene_pos(1)
+        if (p0 - a_pos).manhattanLength() <= (p1 - a_pos).manhattanLength():
+            a_side, b_side = 0, 1
+        else:
+            a_side, b_side = 1, 0
+
+        self._remove_wire_internal(wire)
+        w1 = WireItem(a_comp, a_pin, item, a_side)
+        self.addItem(w1)
+        self._wires.append(w1)
+        w2 = WireItem(item, b_side, b_comp, b_pin)
+        self.addItem(w2)
+        self._wires.append(w2)
+
+        self._cleanup_orphan_junctions()
         self.graphChanged.emit()
         return item
 
@@ -196,13 +269,22 @@ class SchematicScene(QGraphicsScene):
         for p in pts[1:]:
             path.lineTo(p)
         # Brighter solid pen when over a valid target so user has clear
-        # visual feedback that releasing here will connect.
-        color = QColor("#88ff88") if on_target else QColor("#88ff8866")
-        style = Qt.PenStyle.SolidLine if on_target else Qt.PenStyle.DashLine
+        # visual feedback that releasing here will connect.  Off-target
+        # uses an explicit RGBA so it stays clearly visible (a 6-digit
+        # green + Qt's #AARRGGBB parsing of an 8-digit hex used to
+        # silently produce a near-invisible orange).
+        if on_target:
+            color = QColor(120, 255, 120, 255)
+            style = Qt.PenStyle.SolidLine
+            width = 3
+        else:
+            color = QColor(120, 255, 120, 200)
+            style = Qt.PenStyle.DashLine
+            width = 2
         if self._preview_line is None:
             pen = QPen(color)
             pen.setStyle(style)
-            pen.setWidth(2)
+            pen.setWidth(width)
             self._preview_line = QGraphicsPathItem(path)
             self._preview_line.setPen(pen)
             self._preview_line.setZValue(10)
@@ -210,7 +292,7 @@ class SchematicScene(QGraphicsScene):
         else:
             pen = QPen(color)
             pen.setStyle(style)
-            pen.setWidth(2)
+            pen.setWidth(width)
             self._preview_line.setPen(pen)
             self._preview_line.setPath(path)
 

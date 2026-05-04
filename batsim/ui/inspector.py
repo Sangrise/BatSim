@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QComboBox,
 
 from batsim.plugins.registry import (BATTERY_MODELS, list_battery_models,
                                      list_cells)
+from batsim.plugins import refresh_if_changed
 
 
 class InspectorWidget(QWidget):
@@ -37,6 +38,7 @@ class InspectorWidget(QWidget):
 
         # For batteries: add a "cell" picker on top to load params from data file.
         if comp.kind == "BATTERY":
+            refresh_if_changed()
             cells = [""] + list_cells()
             cell_box = QComboBox()
             cell_box.addItems(cells)
@@ -47,7 +49,34 @@ class InspectorWidget(QWidget):
             cell_box.currentTextChanged.connect(self._apply_cell_preset)
             self._form.addRow("cell (preset)", cell_box)
 
+        # Mode-specific parameter visibility for PCS so the user only
+        # sees fields that matter for the chosen mode.
+        pcs_mode = comp.params.get("mode") if comp.kind == "PCS" else None
+        pcs_visible: set[str] | None = None
+        if pcs_mode is not None:
+            base = {"mode", "eta"}
+            relevant = {
+                "V_DC": {"V_DC_set"},
+                "I_DC": {"I_DC_set"},
+                "P_DC": {"P_DC_set"},
+                "CC":   {"I_set"},
+                "CV":   {"V_set"},
+                "CP":   {"P_set"},
+                "CCCV": {"I_set", "V_max", "V_min", "I_term"},
+                "CPCV": {"P_set", "V_max", "V_min", "I_term"},
+                "CYCLE_SIMPLE": {"cyc_I_chg", "cyc_I_dis", "cyc_V_max",
+                                 "cyc_V_min", "cyc_t_rest",
+                                 "cyc_count"},
+                "CYCLE": {"cycle_steps", "cycle_repeat"},
+            }.get(pcs_mode, set())
+            pcs_visible = base | relevant
+
         for key, val in comp.params.items():
+            # Hidden internal state (prefixed with "_") never shown.
+            if key.startswith("_"):
+                continue
+            if pcs_visible is not None and key not in pcs_visible:
+                continue
             if key == "model" and comp.kind == "BATTERY":
                 box = QComboBox()
                 models = list_battery_models() or ["Thevenin"]
@@ -60,16 +89,13 @@ class InspectorWidget(QWidget):
                     lambda v, k=key: self._update_param(k, v))
                 self._form.addRow(key, box)
             elif key == "chemistry" and comp.kind == "BATTERY":
-                from batsim.models.base import OCV_TABLES
-                box = QComboBox()
-                for name in OCV_TABLES.keys():
-                    box.addItem(name)
-                idx = box.findText(str(val))
-                if idx >= 0:
-                    box.setCurrentIndex(idx)
-                box.currentTextChanged.connect(
-                    lambda v, k=key: self._update_param(k, v))
-                self._form.addRow(key, box)
+                # Legacy parameter — chemistry presets removed.  Show as
+                # read-only text so old project files still display sane.
+                edit = QLineEdit(str(val))
+                edit.setReadOnly(True)
+                edit.setToolTip("Chemistry presets removed; use a 'cell' "
+                                "(CSV folder) for real OCV data.")
+                self._form.addRow(key, edit)
             elif key == "mode" and comp.kind == "BUS":
                 box = QComboBox()
                 for name in ("Grid", "PLoad", "ILoad"):
@@ -82,14 +108,17 @@ class InspectorWidget(QWidget):
                 self._form.addRow(key, box)
             elif key == "mode" and comp.kind == "PCS":
                 box = QComboBox()
-                for name in ("V_DC", "I_DC", "P_DC",
+                # CYCLE_SIMPLE first — it's the recommended cycler.
+                for name in ("CYCLE_SIMPLE",
+                             "V_DC", "I_DC", "P_DC",
                              "CC", "CV", "CP", "CCCV", "CPCV", "CYCLE"):
                     box.addItem(name)
                 idx = box.findText(str(val))
                 if idx >= 0:
                     box.setCurrentIndex(idx)
                 box.currentTextChanged.connect(
-                    lambda v, k=key: self._update_param(k, v))
+                    lambda v, k=key: (self._update_param(k, v),
+                                       self.set_component(self._comp)))
                 self._form.addRow(key, box)
             elif isinstance(val, bool):
                 cb = QCheckBox()

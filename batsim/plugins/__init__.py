@@ -35,11 +35,11 @@ from .registry import (
     make_battery,
     make_bms,
 )
-from .loader import discover
+from .loader import discover, refresh_if_changed
 
 __all__ = [
     "BATTERY_MODELS", "BMS_BLOCKS", "CELL_LIBRARY", "BMS_LIBRARY",
     "register_battery_model", "register_bms_block",
     "list_battery_models", "list_cells", "list_bms_profiles",
-    "make_battery", "make_bms", "discover",
+    "make_battery", "make_bms", "discover", "refresh_if_changed",
 ]

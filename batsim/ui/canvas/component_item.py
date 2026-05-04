@@ -157,13 +157,17 @@ class ComponentItem(QGraphicsObject):
             elif tag == "text":
                 painter.drawText(int(prim[1] - 6), int(prim[2]), str(prim[3]))
 
-        # Pins
-        pin_pen = QPen(QColor("#ffcc66"))
-        pin_pen.setWidth(1)
-        painter.setPen(pin_pen)
-        painter.setBrush(QBrush(QColor("#ffcc66")))
-        for (x, y) in self._pin_offsets:
-            painter.drawEllipse(QPointF(x, y), self.PIN_R, self.PIN_R)
+        # Pins — IPROBE has no user-clickable pins (it clamps onto a wire
+        # and is operated as a single point), so skip drawing them.
+        if self.kind != "IPROBE":
+            pin_pen = QPen(QColor("#ffcc66"))
+            pin_pen.setWidth(1)
+            painter.setPen(pin_pen)
+            painter.setBrush(QBrush(QColor("#ffcc66")))
+            hover_pin = getattr(self, "_hover_pin", None)
+            for i, (x, y) in enumerate(self._pin_offsets):
+                r = self.PIN_R + (3 if i == hover_pin else 0)
+                painter.drawEllipse(QPointF(x, y), r, r)
 
         # Label (id + main param)
         painter.setPen(QPen(QColor("#888")))
@@ -194,10 +198,14 @@ class ComponentItem(QGraphicsObject):
                 self._drag_start_scene = event.scenePos()
                 # Fall through to super() so QGraphicsItem's drag flow
                 # initialises (allows dragging if user moves the mouse).
+            elif self.kind == "IPROBE":
+                # Current probe has no user pins; clicks just move it.
+                pass
             else:
                 local = event.pos()
+                # Generous hit radius (PIN_R + 10) so pins are easy to grab.
                 for i, (x, y) in enumerate(self._pin_offsets):
-                    if (local.x() - x) ** 2 + (local.y() - y) ** 2 <= (self.PIN_R + 6) ** 2:
+                    if (local.x() - x) ** 2 + (local.y() - y) ** 2 <= (self.PIN_R + 10) ** 2:
                         self._dragging_pin = i
                         self._drag_start_scene = event.scenePos()
                         self.scene().begin_wire(self, i)
@@ -205,6 +213,29 @@ class ComponentItem(QGraphicsObject):
                         return
         self._dragging_pin = None
         super().mousePressEvent(event)
+
+    def hoverMoveEvent(self, event):  # noqa: N802
+        # Highlight the pin nearest the cursor so users can see where a
+        # click would grab.  Off-pin → no highlight.
+        if self.kind in ("JUNCTION", "IPROBE"):
+            super().hoverMoveEvent(event); return
+        local = event.pos()
+        best = None
+        best_d2 = (self.PIN_R + 10) ** 2
+        for i, (x, y) in enumerate(self._pin_offsets):
+            d2 = (local.x() - x) ** 2 + (local.y() - y) ** 2
+            if d2 < best_d2:
+                best = i; best_d2 = d2
+        if best != getattr(self, "_hover_pin", None):
+            self._hover_pin = best
+            self.update()
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):  # noqa: N802
+        if getattr(self, "_hover_pin", None) is not None:
+            self._hover_pin = None
+            self.update()
+        super().hoverLeaveEvent(event)
 
     def mouseMoveEvent(self, event):  # noqa: N802
         if self._dragging_pin is not None:

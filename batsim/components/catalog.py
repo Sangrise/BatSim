@@ -95,7 +95,7 @@ CATALOG: dict[str, dict] = {
         "pins": 2,
         "default_params": {
             "model": "Thevenin",
-            "chemistry": "NCM",
+            "cell": "",
             "capacity_Ah": 2.5,
             "soc0": 1.0,
             "R0": 0.03,
@@ -159,27 +159,33 @@ CATALOG: dict[str, dict] = {
         ],
     },
     "PROBE": {
-        "label": "Voltage probe",
+        "label": "Voltage probe (differential)",
         "kind": "PROBE",
-        "pins": 1,
-        "default_params": {},
-        "symbol": [
-            ("line", 0, -20, 0, -8),
-            ("circle", 0, -4, 6),
-            ("text", 8, -2, "V"),
-        ],
-    },
-    "IPROBE": {
-        "label": "Current probe",
-        "kind": "IPROBE",
         "pins": 2,
         "default_params": {},
         "symbol": [
             ("line", -30, 0, -10, 0),
-            ("circle", 0, 0, 10),
-            ("text", -3, 4, "A"),
             ("line", 10, 0, 30, 0),
-            ("text", 0, -16, "IP"),
+            ("rect", -10, -8, 20, 16),
+            ("text", 0, 4, "V"),
+            ("text", -22, -10, "+"),
+            ("text", 18, -10, "−"),
+            ("text", 0, -16, "Vp"),
+        ],
+    },
+    "IPROBE": {
+        "label": "Current probe (drop on a wire)",
+        "kind": "IPROBE",
+        "pins": 2,
+        "default_params": {},
+        # Visual: a small clamp ring centred on the wire.  The two engine
+        # pins are at (-12, 0) and (12, 0) so the auto-split wires meet
+        # the ring's edges; the ring itself reads as a single point.
+        "symbol": [
+            ("circle", 0, 0, 9),
+            ("circle", 0, 0, 5),
+            ("text", 0, 4, "A"),
+            ("text", 0, -16, "I"),
         ],
     },
     "IPATTERN": {
@@ -319,6 +325,16 @@ CATALOG: dict[str, dict] = {
         #   CYCLE               — execute cycle_steps (JSON list) cycle_repeat
         #                         times.  Each step: {mode, I/V/P, V_max/V_min,
         #                         I_term, max_time, time}.
+        # Modes (high-level; CYCLE_SIMPLE is the recommended default for
+        # cycle testing, others are advanced):
+        #   V_DC / I_DC / P_DC — stiff DC setpoint.
+        #   CC / CV / CP        — single-phase profile.
+        #   CCCV / CPCV         — single charge OR discharge with CV taper.
+        #   CYCLE_SIMPLE        — repeating charge(CCCV)→rest→discharge(CC)→
+        #                         rest cycle.  Only 7 numeric params, no JSON.
+        #   CYCLE               — advanced: arbitrary step list (cycle_steps
+        #                         JSON).  Use only if CYCLE_SIMPLE isn't
+        #                         enough.
         "default_params": {
             "mode": "V_DC",
             "V_DC_set": 800.0,
@@ -330,6 +346,14 @@ CATALOG: dict[str, dict] = {
             "V_max": 0.0,
             "V_min": 0.0,
             "I_term": 0.0,
+            # CYCLE_SIMPLE parameters
+            "cyc_I_chg": 0.0,
+            "cyc_I_dis": 0.0,
+            "cyc_V_max": 4.2,
+            "cyc_V_min": 3.0,
+            "cyc_t_rest": 600.0,
+            "cyc_count": 1,
+            # CYCLE (advanced) parameters
             "cycle_steps": "[]",
             "cycle_repeat": 1,
             "eta": 0.98,
@@ -356,10 +380,17 @@ def pin_offsets(kind: str) -> list[tuple[float, float]]:
     n = CATALOG[kind]["pins"]
     if n == 1:
         if kind == "PROBE":
-            return [(0.0, -20.0)]
-        if kind == "JUNCTION":
+            return [(0.0, -20.0)]  # legacy single-pin probe
+        if kind in ("JUNCTION", "IPROBE"):
             return [(0.0, 0.0)]
         return [(0.0, -10.0)]
+    if n == 2 and kind == "IPROBE":
+        # Clamp probe: pins on the ring's edges (±12) so the auto-split
+        # wires meet the small ring symbol cleanly without sticking out.
+        return [(-12.0, 0.0), (12.0, 0.0)]
+    if n == 2 and kind == "PROBE":
+        # Differential probe: V(+) on left, V(−) on right
+        return [(-30.0, 0.0), (30.0, 0.0)]
     if n == 3 and kind == "MOSFET":
         # D (top), G (left), S (bottom)
         return [(12.0, -20.0), (-30.0, 0.0), (12.0, 20.0)]
