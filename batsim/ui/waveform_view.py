@@ -191,6 +191,8 @@ class _PlotPanel(QFrame):
         self.plot.setLabel("left", _kind_label(l_label) if l_label else "")
         self.plot.getAxis("right").setLabel(
             _kind_label(r_label) if r_label else "")
+        # Hide the right axis entirely when nothing is plotted on it.
+        self.plot.showAxis("right", r_label is not None)
         self._sync_right_vb()
 
 
