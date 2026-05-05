@@ -537,6 +537,11 @@ class SchematicScene(QGraphicsScene):
         self.clear()
         self._components.clear()
         self._wires.clear()
+        # self.clear() destroyed the CrossingsOverlay along with everything
+        # else; rebuild it so dot/hop/shift indicators render on the
+        # freshly-loaded schematic.
+        self._crossings = CrossingsOverlay(self)
+        self.addItem(self._crossings)
         self._uid = 0
         id_to_comp: dict[str, ComponentItem] = {}
         for c in graph.get("components", []):
