@@ -224,19 +224,36 @@ class CrossingsOverlay(QGraphicsItem):
                 painter.drawEllipse(p, DOT_RADIUS, DOT_RADIUS)
         # Hops — different nodes, draw an arc that "jumps over"
         if self._hops:
-            # First, mask the underlying wire with a small background
-            # rectangle so the hop reads cleanly.
+            # Mask the underlying *hopping* wire with two background-color
+            # rectangles, one on each side of the crossed wire.  Leaving a
+            # 3 px gap centred on the crossing means the perpendicular
+            # (crossed) wire stays continuous and only the hopping wire is
+            # erased to make room for the arc.
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor("#1e1e1e")))  # scene bg
+            GAP = 3.0  # half-width of the protected band for the crossed wire
+            STRIP = 3.0  # width of the strip that erases the hopping wire
             for p, axis in self._hops:
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(QColor("#1e1e1e")))  # scene bg
                 if axis == 'h':
+                    # Hopping wire is horizontal -> erase left/right of (p.x())
                     painter.drawRect(QRectF(p.x() - HOP_RADIUS - 1,
-                                            p.y() - 2,
-                                            HOP_RADIUS * 2 + 2, 4))
+                                            p.y() - STRIP / 2,
+                                            (HOP_RADIUS + 1) - GAP,
+                                            STRIP))
+                    painter.drawRect(QRectF(p.x() + GAP,
+                                            p.y() - STRIP / 2,
+                                            (HOP_RADIUS + 1) - GAP,
+                                            STRIP))
                 else:
-                    painter.drawRect(QRectF(p.x() - 2,
+                    # Hopping wire is vertical -> erase above/below p.y()
+                    painter.drawRect(QRectF(p.x() - STRIP / 2,
                                             p.y() - HOP_RADIUS - 1,
-                                            4, HOP_RADIUS * 2 + 2))
+                                            STRIP,
+                                            (HOP_RADIUS + 1) - GAP))
+                    painter.drawRect(QRectF(p.x() - STRIP / 2,
+                                            p.y() + GAP,
+                                            STRIP,
+                                            (HOP_RADIUS + 1) - GAP))
             # Then draw the arc on top.
             pen = QPen(QColor("#88ff88"))
             pen.setWidth(2)
