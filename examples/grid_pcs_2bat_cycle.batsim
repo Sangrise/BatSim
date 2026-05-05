@@ -1,0 +1,126 @@
+{
+  "components": [
+    {
+      "id": "G1",
+      "kind": "GRID",
+      "params": {"V_rms": 220.0, "freq": 60.0, "phase_deg": 0.0},
+      "pins": [null, null],
+      "pos": [-260, 0],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "PCS1",
+      "kind": "PCS",
+      "params": {
+        "mode": "CYCLE",
+        "n_series": 2,
+        "V_DC_set": 0.0,
+        "I_DC_set": 0.0,
+        "P_DC_set": 0.0,
+        "I_set": 0.0,
+        "V_set": 0.0,
+        "P_set": 0.0,
+        "V_max": 0.0,
+        "V_min": 0.0,
+        "I_term": 0.0,
+        "cyc_I_chg": 0.0,
+        "cyc_I_dis": 0.0,
+        "cyc_V_max_cell": 4.2,
+        "cyc_V_min_cell": 3.0,
+        "cyc_t_rest": 60.0,
+        "cyc_count": 1,
+        "cycle_steps": "[{\"mode\": \"CP\", \"P\": -50.0, \"V_max_cell\": 4.2, \"max_time\": 600}, {\"mode\": \"REST\", \"time\": 60}, {\"mode\": \"CP\", \"P\": 50.0, \"V_min_cell\": 3.0, \"max_time\": 600}, {\"mode\": \"REST\", \"time\": 60}]",
+        "cycle_repeat": 30,
+        "eta": 0.98
+      },
+      "pins": [null, null, null, null],
+      "pos": [-80, 0],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "Rline",
+      "kind": "R",
+      "params": {"R": 0.01},
+      "pins": [null, null],
+      "pos": [60, -16],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "IP1",
+      "kind": "IPROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [140, -16],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "B1",
+      "kind": "BATTERY",
+      "params": {
+        "model": "Thevenin",
+        "cell": "",
+        "capacity_Ah": 2.5,
+        "soc0": 0.5,
+        "R0": 0.005,
+        "R1": 0.002,
+        "C1": 5000.0
+      },
+      "pins": [null, null],
+      "pos": [220, -16],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "B2",
+      "kind": "BATTERY",
+      "params": {
+        "model": "Thevenin",
+        "cell": "",
+        "capacity_Ah": 2.5,
+        "soc0": 0.55,
+        "R0": 0.005,
+        "R1": 0.002,
+        "C1": 5000.0
+      },
+      "pins": [null, null],
+      "pos": [360, -16],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "P1",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [220, 80],
+      "rotation": 0,
+      "tap_pin": null
+    },
+    {
+      "id": "P2",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [360, 80],
+      "rotation": 0,
+      "tap_pin": null
+    }
+  ],
+  "wires": [
+    {"a": "G1.0",   "b": "PCS1.0"},
+    {"a": "G1.1",   "b": "PCS1.1"},
+    {"a": "PCS1.2", "b": "Rline.0"},
+    {"a": "Rline.1","b": "IP1.0"},
+    {"a": "IP1.1",  "b": "B1.0"},
+    {"a": "B1.1",   "b": "B2.0"},
+    {"a": "B2.1",   "b": "PCS1.3"},
+    {"a": "P1.0",   "b": "B1.0"},
+    {"a": "P1.1",   "b": "B1.1"},
+    {"a": "P2.0",   "b": "B2.0"},
+    {"a": "P2.1",   "b": "B2.1"}
+  ]
+}
