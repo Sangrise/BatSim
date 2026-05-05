@@ -224,45 +224,39 @@ class CrossingsOverlay(QGraphicsItem):
                 painter.drawEllipse(p, DOT_RADIUS, DOT_RADIUS)
         # Hops — different nodes, draw an arc that "jumps over"
         if self._hops:
-            # Mask the underlying *hopping* wire with two background-color
-            # rectangles, one on each side of the crossed wire.  Leaving a
-            # 3 px gap centred on the crossing means the perpendicular
-            # (crossed) wire stays continuous and only the hopping wire is
-            # erased to make room for the arc.
+            # Step 1: mask the hopping wire entirely under the arc with the
+            # scene background colour.
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(QColor("#1e1e1e")))  # scene bg
-            GAP = 3.0  # half-width of the protected band for the crossed wire
-            STRIP = 3.0  # width of the strip that erases the hopping wire
+            painter.setBrush(QBrush(QColor("#1e1e1e")))
+            STRIP = 3.0
             for p, axis in self._hops:
                 if axis == 'h':
-                    # Hopping wire is horizontal -> erase left/right of (p.x())
                     painter.drawRect(QRectF(p.x() - HOP_RADIUS - 1,
                                             p.y() - STRIP / 2,
-                                            (HOP_RADIUS + 1) - GAP,
-                                            STRIP))
-                    painter.drawRect(QRectF(p.x() + GAP,
-                                            p.y() - STRIP / 2,
-                                            (HOP_RADIUS + 1) - GAP,
-                                            STRIP))
+                                            HOP_RADIUS * 2 + 2, STRIP))
                 else:
-                    # Hopping wire is vertical -> erase above/below p.y()
                     painter.drawRect(QRectF(p.x() - STRIP / 2,
                                             p.y() - HOP_RADIUS - 1,
-                                            STRIP,
-                                            (HOP_RADIUS + 1) - GAP))
-                    painter.drawRect(QRectF(p.x() - STRIP / 2,
-                                            p.y() + GAP,
-                                            STRIP,
-                                            (HOP_RADIUS + 1) - GAP))
-            # Then draw the arc on top.
-            pen = QPen(QColor("#88ff88"))
-            pen.setWidth(2)
-            painter.setPen(pen)
+                                            STRIP, HOP_RADIUS * 2 + 2))
+            # Step 2: restore a small piece of the crossed (perpendicular)
+            # wire on top so it stays continuous through the hop.
+            wire_pen = QPen(QColor("#88ff88"))
+            wire_pen.setWidth(2)
+            painter.setPen(wire_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
+            for p, axis in self._hops:
+                if axis == 'h':
+                    # Hopping wire is horizontal -> crossed wire is vertical.
+                    painter.drawLine(int(p.x()), int(p.y() - STRIP),
+                                     int(p.x()), int(p.y() + STRIP))
+                else:
+                    painter.drawLine(int(p.x() - STRIP), int(p.y()),
+                                     int(p.x() + STRIP), int(p.y()))
+            # Step 3: draw the hop arc itself.
             for p, axis in self._hops:
                 rect = QRectF(p.x() - HOP_RADIUS, p.y() - HOP_RADIUS,
                               HOP_RADIUS * 2, HOP_RADIUS * 2)
                 if axis == 'h':
-                    painter.drawArc(rect, 0, 180 * 16)  # arch upward
+                    painter.drawArc(rect, 0, 180 * 16)
                 else:
-                    painter.drawArc(rect, 90 * 16, 180 * 16)  # arch leftward
+                    painter.drawArc(rect, 90 * 16, 180 * 16)
