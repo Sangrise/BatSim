@@ -80,7 +80,10 @@ class NonlinearMNASystem(MNASystem):
 
     def _stamp_pconst(self, A, b, e, x_guess):
         """Constant-power load: positive P sinks power from pin0 to pin1.
-        I(V) = P / V → linearise via Newton with g = -P/V², I_eq = I0 - g·V."""
+        I(V) = P / V → linearise via Newton.
+        For a LOAD (current drained out of pin0), the Norton has
+        g = -P/V_g² (negative-slope effective admittance) and
+        I_eq = 2·I0 = 2·P/V_g."""
         P = float(e.params.get("P", 0.0))
         Vd = (self._node_voltage_x(x_guess, e.nodes[0])
               - self._node_voltage_x(x_guess, e.nodes[1]))
@@ -90,7 +93,7 @@ class NonlinearMNASystem(MNASystem):
             Vd = VMIN if Vd >= 0 else -VMIN
         I0 = P / Vd
         g = -P / (Vd * Vd)
-        Ieq = I0 - g * Vd
+        Ieq = I0 - g * Vd  # = 2 * I0
         self._stamp_admittance(A, e.nodes[0], e.nodes[1], g)
         # Current flows from pin0 -> pin1 (P > 0 = load on +pin)
         self._stamp_current(b, e.nodes[0], e.nodes[1], Ieq)
@@ -151,16 +154,25 @@ class NonlinearMNASystem(MNASystem):
         if abs(Vd) < VMIN:
             Vd = VMIN if Vd >= 0 else -VMIN
         I0 = P_dc / Vd
-        g = -P_dc / (Vd * Vd)
-        Ieq = I0 - g * Vd
+        g = P_dc / (Vd * Vd)
+        Ieq = 2.0 * I0
         # Norton on DC port (sign matches I_DC mode: +P = charge → source).
         self._stamp_admittance(A, e.nodes[2], e.nodes[3], g)
         self._stamp_current(b, e.nodes[3], e.nodes[2], Ieq)
-        # Observer row: Iv = I0  (no node coupling, just expose current).
+        # Observer row: iv = Ieq - g*(V+ - V-)  (= actual through-current at
+        # convergence, NOT the linearisation point).  For Norton I_eq + g*V
+        # convention, the actual current source-side at + node equals
+        # I_eq - g*Vd (current INTO + from the source).
         idx = self.vs_index[e.name]
         vs_row = self.n_nodes + idx
-        # mna.build already added A[vs_row, vs_row] += 1.0 ; just set b.
-        b[vs_row] += I0
+        ip = self._ni(e.nodes[2])
+        in_ = self._ni(e.nodes[3])
+        # mna.build already added A[vs_row, vs_row] += 1.0
+        if ip >= 0:
+            A[vs_row, ip] += g
+        if in_ >= 0:
+            A[vs_row, in_] -= g
+        b[vs_row] += Ieq
 
     def build_nonlinear(self, x_prev, dt, t, x_guess):
         A, b = self.build(x_prev, dt, t)
@@ -196,15 +208,25 @@ def _has_nonlinear(netlist: Netlist) -> bool:
 
 def solve_nonlinear_step(sys: NonlinearMNASystem, x_prev, dt, t, x_init=None):
     x = x_init.copy() if x_init is not None else np.zeros(sys.size)
-    for _ in range(sys.MAX_ITER):
+    # Adaptive damping: tighter when iterations stall to handle constant-power
+    # Norton stamps that can have negative effective conductance.
+    damp = 0.7
+    for it in range(sys.MAX_ITER):
         A, b = sys.build_nonlinear(x_prev, dt, t, x)
         try:
             x_new = np.linalg.solve(A, b)
         except np.linalg.LinAlgError:
             x_new = x
-        if np.linalg.norm(x_new - x, ord=np.inf) < sys.TOL:
+        delta = x_new - x
+        if np.linalg.norm(delta, ord=np.inf) < sys.TOL:
             return x_new
-        x = 0.7 * x_new + 0.3 * x  # damping
+        # Increase damping on large jumps (helps when V crosses zero on a
+        # constant-power stamp and Newton wants to jump to the unstable
+        # high-current low-voltage branch).
+        norm = float(np.linalg.norm(delta, ord=np.inf))
+        if norm > 5.0 and it > 2:
+            damp = 0.3
+        x = damp * x_new + (1.0 - damp) * x
     return x
 
 
