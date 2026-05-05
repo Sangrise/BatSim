@@ -219,16 +219,20 @@ class SchematicScene(QGraphicsScene):
         self._hide_preview()
 
     # --- live preview path for drag-to-wire ---
-    def _preview_blockers(self, exclude: ComponentItem | None) -> list[QRectF]:
+    def _preview_blockers(self, exclude: ComponentItem | None,
+                          exclude_target: ComponentItem | None = None) -> list[QRectF]:
+        """Return blocker rects matching WireItem._blockers() so the
+        dashed preview routes identically to the solid wire that will
+        be created on release."""
         out = []
         for c in self._components:
-            if c is exclude:
-                # Source pin's component: shrink bbox so the outgoing
-                # stub starting on the pin (boundary) stays outside, but
-                # a routing detour that crosses its body is still rejected.
+            if c is exclude or c is exclude_target:
+                # Endpoint components: shrink slightly so the stub
+                # starting on the pin (boundary) remains outside while a
+                # detour through the body is still rejected.
                 out.append(c.sceneBoundingRect().adjusted(3, 3, -3, -3))
                 continue
-            out.append(c.sceneBoundingRect().adjusted(-2, -2, 2, 2))
+            out.append(c.sceneBoundingRect().adjusted(-4, -4, 4, 4))
         return out
 
     def _show_preview_to(self, scene_pos: QPointF) -> None:
@@ -247,7 +251,8 @@ class SchematicScene(QGraphicsScene):
             b_comp, b_pin = hit
             end = b_comp.pin_scene_pos(b_pin)
             b_dir = b_comp.pin_exit_direction(b_pin)
-            blockers = self._preview_blockers(exclude=a_comp)
+            blockers = self._preview_blockers(exclude=a_comp,
+                                              exclude_target=b_comp)
             blockers = [r for r in blockers
                         if not r.contains(b_comp.pin_scene_pos(b_pin))]
             on_target = True
@@ -415,7 +420,7 @@ class SchematicScene(QGraphicsScene):
         for c in self._components:
             if c is wire.a_comp or c is wire.b_comp:
                 continue
-            blockers.append(c.sceneBoundingRect().adjusted(2, 2, -2, -2))
+            blockers.append(c.sceneBoundingRect().adjusted(-4, -4, 4, 4))
 
         def blocked(p: QPointF) -> bool:
             return any(r.contains(p) for r in blockers)
@@ -470,9 +475,12 @@ class SchematicScene(QGraphicsScene):
                         count += 1
             return count
 
-        # Sort candidates by (#crossings, distance to user's drop).
-        scored = [(route_crossings(p),
-                   (p.x() - drop.x()) ** 2 + (p.y() - drop.y()) ** 2,
+        # Sort candidates by (distance to drop, #crossings).  The user
+        # released over a specific point on the wire and expects the
+        # tap node to land *there*; crossings are used only as a
+        # tiebreaker when two grid points are equally close.
+        scored = [((p.x() - drop.x()) ** 2 + (p.y() - drop.y()) ** 2,
+                   route_crossings(p),
                    p) for p in free]
         scored.sort(key=lambda t: (t[0], t[1]))
         return scored[0][2]
@@ -498,7 +506,7 @@ class SchematicScene(QGraphicsScene):
     def to_graph(self) -> dict:
         components = []
         for c in self._components:
-            components.append({
+            entry = {
                 "id": c.cid,
                 "kind": c.kind,
                 "params": dict(c.params),
@@ -506,7 +514,11 @@ class SchematicScene(QGraphicsScene):
                 "pos": [c.pos().x(), c.pos().y()],
                 "rotation": c.rotation(),
                 "tap_pin": c.tap_pin,
-            })
+            }
+            sc = c.scale()
+            if sc and abs(sc - 1.0) > 1e-3:
+                entry["scale"] = float(sc)
+            components.append(entry)
         wires = [{"a": f"{w.a_comp.cid}.{w.a_pin}",
                   "b": f"{w.b_comp.cid}.{w.b_pin}"} for w in self._wires]
         # Synthetic wires for JUNCTION taps so the netlist unions correctly
@@ -535,6 +547,12 @@ class SchematicScene(QGraphicsScene):
             pos = c.get("pos", [0, 0])
             item.setPos(QPointF(pos[0], pos[1]))
             item.setRotation(c.get("rotation", 0))
+            sc = c.get("scale")
+            if sc:
+                try:
+                    item.setScale(float(sc))
+                except Exception:
+                    pass
             self.addItem(item)
             self._components.append(item)
             id_to_comp[c["id"]] = item

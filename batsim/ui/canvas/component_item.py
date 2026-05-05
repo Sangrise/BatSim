@@ -2,13 +2,43 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QRectF, QPointF, Qt
-from PyQt6.QtGui import QPen, QBrush, QColor, QPainter, QFont, QTransform, QAction
+from PyQt6.QtGui import (QPen, QBrush, QColor, QPainter, QFont, QTransform,
+                         QAction, QPainterPath)
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsObject, QMenu
 
 from batsim.components.catalog import CATALOG, pin_offsets
 
 
 DRAG_THRESHOLD = 4  # pixels of movement that distinguish drag from click
+HANDLE_SIZE = 8     # corner resize handle square (local px before scale)
+MIN_SCALE = 0.5
+MAX_SCALE = 4.0
+
+
+def _symbol_bbox(spec: dict) -> QRectF:
+    """Tight bbox over the visible symbol primitives — excludes the
+    user-facing label area so hit-testing only catches the body."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for prim in spec.get("symbol", []):
+        tag = prim[0]
+        if tag == "line":
+            xs += [prim[1], prim[3]]; ys += [prim[2], prim[4]]
+        elif tag == "rect":
+            xs += [prim[1], prim[1] + prim[3]]
+            ys += [prim[2], prim[2] + prim[4]]
+        elif tag in ("circle", "fcircle"):
+            cx, cy, r = prim[1], prim[2], prim[3]
+            xs += [cx - r, cx + r]; ys += [cy - r, cy + r]
+        elif tag == "arc":
+            x, y, w, h = prim[1:5]
+            xs += [x, x + w]; ys += [y, y + h]
+        elif tag == "text":
+            xs += [prim[1] - 10, prim[1] + 10]
+            ys += [prim[2] - 8, prim[2] + 4]
+    if not xs:
+        return QRectF(-30, -10, 60, 20)
+    return QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
 
 
 class ComponentItem(QGraphicsObject):
@@ -22,14 +52,20 @@ class ComponentItem(QGraphicsObject):
         self.params: dict = dict(spec["default_params"])
         self.n_pins: int = spec["pins"]
         self._pin_offsets = pin_offsets(kind)
+        self._sym_bbox = _symbol_bbox(spec)
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
             | QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges
         )
         self.setAcceptHoverEvents(True)
+        self.setTransformOriginPoint(0, 0)
         self._dragging_pin = None
         self._drag_start_scene: QPointF | None = None
+        # Resize handle currently being dragged ('tl'/'tr'/'bl'/'br').
+        self._resize_handle: str | None = None
+        self._resize_start_scale: float = 1.0
+        self._resize_start_dist: float = 1.0
         # For JUNCTION components placed on top of an existing wire as a
         # tap, this stores the pin label of the original wire's endpoint.
         # Used by `to_graph` to emit a synthetic wire connecting the
@@ -42,10 +78,62 @@ class ComponentItem(QGraphicsObject):
         self.tap_wire = None
 
     # --- geometry ---
+    def _label_rect(self) -> QRectF:
+        """Local rect reserved for the dynamic ID+value label, drawn just
+        above the symbol body so it stays attached visually."""
+        if self.kind in ("JUNCTION", "IPROBE"):
+            return QRectF()
+        sb = self._sym_bbox
+        return QRectF(sb.left(), sb.top() - 16, sb.width(), 14)
+
     def boundingRect(self) -> QRectF:  # noqa: N802
         if self.kind == "JUNCTION":
             return QRectF(-8, -8, 16, 16)
-        return QRectF(-40, -30, 80, 60)
+        if self.kind == "IPROBE":
+            return QRectF(-16, -22, 32, 44)
+        body = self._sym_bbox.adjusted(-4, -4, 4, 4)
+        body = body.united(self._label_rect())
+        # Reserve room for the corner resize handles when selected.
+        return body.adjusted(-HANDLE_SIZE, -HANDLE_SIZE,
+                             HANDLE_SIZE, HANDLE_SIZE)
+
+    def shape(self):  # noqa: N802
+        """Tight hit-test region: only the symbol body + corner handles
+        when selected.  This keeps wires routed near the component
+        clickable instead of being swallowed by the much-larger
+        boundingRect."""
+        path = QPainterPath()
+        if self.kind in ("JUNCTION", "IPROBE"):
+            path.addRect(self.boundingRect())
+            return path
+        body = self._sym_bbox.adjusted(-2, -2, 2, 2)
+        path.addRect(body)
+        # Pin discs so users can still grab pins outside the body.
+        for x, y in self._pin_offsets:
+            path.addEllipse(QPointF(x, y), self.PIN_R + 4, self.PIN_R + 4)
+        # Resize handles — only hit-testable when selected.
+        if self.isSelected():
+            for hx, hy in self._handle_centres():
+                path.addRect(hx - HANDLE_SIZE / 2, hy - HANDLE_SIZE / 2,
+                             HANDLE_SIZE, HANDLE_SIZE)
+        return path
+
+    def _handle_centres(self) -> list[tuple[float, float]]:
+        if self.kind in ("JUNCTION", "IPROBE"):
+            return []
+        body = self._sym_bbox.united(self._label_rect()).adjusted(-4, -4, 4, 4)
+        return [(body.left(),  body.top()),
+                (body.right(), body.top()),
+                (body.left(),  body.bottom()),
+                (body.right(), body.bottom())]
+
+    def _handle_at(self, local_pt: QPointF) -> str | None:
+        names = ("tl", "tr", "bl", "br")
+        for name, (hx, hy) in zip(names, self._handle_centres()):
+            if abs(local_pt.x() - hx) <= HANDLE_SIZE and \
+               abs(local_pt.y() - hy) <= HANDLE_SIZE:
+                return name
+        return None
 
     def pin_scene_pos(self, idx: int) -> QPointF:
         x, y = self._pin_offsets[idx]
@@ -134,8 +222,10 @@ class ComponentItem(QGraphicsObject):
         pen.setWidth(2)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        font = QFont("Consolas", 8)
-        painter.setFont(font)
+        # Symbol descriptive text (drawn inside the symbol primitives).
+        sym_font = QFont("Consolas", 9)
+        sym_font.setBold(True)
+        painter.setFont(sym_font)
 
         for prim in self.spec["symbol"]:
             tag = prim[0]
@@ -169,13 +259,28 @@ class ComponentItem(QGraphicsObject):
                 r = self.PIN_R + (3 if i == hover_pin else 0)
                 painter.drawEllipse(QPointF(x, y), r, r)
 
-        # Label (id + main param)
-        painter.setPen(QPen(QColor("#888")))
-        label = self.cid
-        v = self._main_value()
-        if v is not None:
-            label = f"{self.cid}={v}"
-        painter.drawText(-30, 28, label)
+        # ID + main parameter label, drawn just above the symbol so it
+        # stays visually attached to its component (used to be far below
+        # the body which made it ambiguous when components were close).
+        if self.kind not in ("JUNCTION", "IPROBE"):
+            painter.setPen(QPen(QColor("#cccccc")))
+            label_font = QFont("Consolas", 9)
+            painter.setFont(label_font)
+            label = self.cid
+            v = self._main_value()
+            if v is not None:
+                label = f"{self.cid}={v}"
+            lr = self._label_rect()
+            painter.drawText(QRectF(lr), Qt.AlignmentFlag.AlignCenter, label)
+
+        # Resize handles — only when selected
+        if self.isSelected() and self.kind not in ("JUNCTION", "IPROBE"):
+            painter.setBrush(QBrush(QColor("#ffcc66")))
+            painter.setPen(QPen(QColor("#000000")))
+            for hx, hy in self._handle_centres():
+                painter.drawRect(QRectF(hx - HANDLE_SIZE / 2,
+                                        hy - HANDLE_SIZE / 2,
+                                        HANDLE_SIZE, HANDLE_SIZE))
 
     def _main_value(self) -> str | None:
         for k in ("R", "L", "C", "V", "I", "model"):
@@ -192,6 +297,18 @@ class ComponentItem(QGraphicsObject):
         # and emit graphChanged for undo tracking.
         self._press_pos = self.pos()
         if event.button() == Qt.MouseButton.LeftButton:
+            # Resize handle: only available when already selected.
+            if (self.isSelected()
+                    and self.kind not in ("JUNCTION", "IPROBE")):
+                h = self._handle_at(event.pos())
+                if h is not None:
+                    self._resize_handle = h
+                    self._resize_start_scale = self.scale() or 1.0
+                    s = event.scenePos() - self.scenePos()
+                    self._resize_start_dist = max((s.x() ** 2 + s.y() ** 2)
+                                                  ** 0.5, 1.0)
+                    event.accept()
+                    return
             if self.kind == "JUNCTION":
                 # Junction is itself a node — record press but defer the
                 # "start wire vs. drag" decision until release/move.
@@ -238,6 +355,23 @@ class ComponentItem(QGraphicsObject):
         super().hoverLeaveEvent(event)
 
     def mouseMoveEvent(self, event):  # noqa: N802
+        if self._resize_handle is not None:
+            s = event.scenePos() - self.scenePos()
+            dist = max((s.x() ** 2 + s.y() ** 2) ** 0.5, 1.0)
+            ratio = dist / self._resize_start_dist
+            new = max(MIN_SCALE, min(MAX_SCALE,
+                                     self._resize_start_scale * ratio))
+            # Snap scale to 0.1 increments for predictability.
+            new = round(new * 10.0) / 10.0
+            if abs(new - self.scale()) > 1e-3:
+                self.prepareGeometryChange()
+                self.setScale(new)
+                self._refresh_attached_wires()
+                sc = self.scene()
+                if sc is not None and hasattr(sc, "_refresh_crossings"):
+                    sc._refresh_crossings()
+            event.accept()
+            return
         if self._dragging_pin is not None:
             self.scene().update_preview_to(event.scenePos())
             event.accept()
@@ -249,6 +383,13 @@ class ComponentItem(QGraphicsObject):
                 w.refresh()
 
     def mouseReleaseEvent(self, event):  # noqa: N802
+        if self._resize_handle is not None:
+            self._resize_handle = None
+            sc = self.scene()
+            if sc is not None and hasattr(sc, "graphChanged"):
+                sc.graphChanged.emit()
+            event.accept()
+            return
         if self._dragging_pin is not None:
             scene = self.scene()
             start = self._drag_start_scene or event.scenePos()
@@ -324,7 +465,7 @@ class ComponentItem(QGraphicsObject):
         for c in getattr(scene, "_components", []):
             if c is self or c is wire.a_comp or c is wire.b_comp:
                 continue
-            blockers.append(c.sceneBoundingRect().adjusted(2, 2, -2, -2))
+            blockers.append(c.sceneBoundingRect().adjusted(-4, -4, 4, 4))
 
         def blocked(p: QPointF) -> bool:
             return any(r.contains(p) for r in blockers)

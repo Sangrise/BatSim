@@ -54,6 +54,35 @@ def _seg_cross(s1: tuple[QPointF, QPointF],
     return None
 
 
+def _seg_overlap(s1: tuple[QPointF, QPointF],
+                 s2: tuple[QPointF, QPointF]
+                 ) -> tuple[QPointF, QPointF, str] | None:
+    """If two axis-aligned segments are collinear and overlap (more than
+    a single point), return the overlap endpoints and axis ('h'/'v').
+    Used to flag two non-connected wires that visually share a stretch
+    of pixels — they would otherwise look like a single continuous line.
+    """
+    a, b = s1
+    c, d = s2
+    horiz1 = abs(a.y() - b.y()) < 0.5
+    horiz2 = abs(c.y() - d.y()) < 0.5
+    vert1  = abs(a.x() - b.x()) < 0.5
+    vert2  = abs(c.x() - d.x()) < 0.5
+    if horiz1 and horiz2 and abs(a.y() - c.y()) < 0.5:
+        x_lo = max(min(a.x(), b.x()), min(c.x(), d.x()))
+        x_hi = min(max(a.x(), b.x()), max(c.x(), d.x()))
+        if x_hi - x_lo > 1.5:
+            y = a.y()
+            return QPointF(x_lo, y), QPointF(x_hi, y), 'h'
+    if vert1 and vert2 and abs(a.x() - c.x()) < 0.5:
+        y_lo = max(min(a.y(), b.y()), min(c.y(), d.y()))
+        y_hi = min(max(a.y(), b.y()), max(c.y(), d.y()))
+        if y_hi - y_lo > 1.5:
+            x = a.x()
+            return QPointF(x, y_lo), QPointF(x, y_hi), 'v'
+    return None
+
+
 def _node_groups(scene) -> dict[tuple[int, int], int]:
     """Union-find on (id(wire), endpoint_index) → group id."""
     parent: dict[tuple, tuple] = {}
@@ -99,6 +128,10 @@ class CrossingsOverlay(QGraphicsItem):
         self._scene = schematic_scene
         self._dots: list[QPointF] = []
         self._hops: list[tuple[QPointF, str]] = []  # (point, axis 'h'|'v')
+        # Parallel-overlap "shift" markers — for two unconnected wires
+        # that share a stretch along the same axis we mask the original
+        # span and re-draw it offset by a few px so it reads as separate.
+        self._shifts: list[tuple[QPointF, QPointF, str]] = []
         self._bbox = QRectF()
         self.setZValue(5)
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
@@ -107,10 +140,10 @@ class CrossingsOverlay(QGraphicsItem):
         self.prepareGeometryChange()
         wires = list(self._scene._wires)
         groups = _node_groups(self._scene)
-        seen: dict[tuple[int, int], list[QPointF]] = {}
         # also: seen connected positions to avoid duplicating dots
         dots: set[tuple[int, int]] = set()
         hops: list[tuple[QPointF, str]] = []
+        shifts: list[tuple[QPointF, QPointF, str]] = []
         bbox = QRectF()
         for i, w1 in enumerate(wires):
             segs1 = _segments(w1)
@@ -122,20 +155,31 @@ class CrossingsOverlay(QGraphicsItem):
                 for s1 in segs1:
                     for s2 in segs2:
                         p = _seg_cross(s1, s2)
-                        if p is None:
+                        if p is not None:
+                            key = (int(round(p.x())), int(round(p.y())))
+                            if g1 == g2:
+                                dots.add(key)
+                            else:
+                                axis = 'h' if abs(s2[0].y() - s2[1].y()) < 0.5 else 'v'
+                                hops.append((p, axis))
+                            bbox = bbox.united(QRectF(p.x() - 12, p.y() - 12,
+                                                      24, 24))
                             continue
-                        key = (int(round(p.x())), int(round(p.y())))
+                        ov = _seg_overlap(s1, s2)
+                        if ov is None:
+                            continue
                         if g1 == g2:
-                            dots.add(key)
-                        else:
-                            # Hop: mark on the second wire (drawn later).
-                            # Pick axis from s2 orientation.
-                            axis = 'h' if abs(s2[0].y() - s2[1].y()) < 0.5 else 'v'
-                            hops.append((p, axis))
-                        bbox = bbox.united(QRectF(p.x() - 12, p.y() - 12,
-                                                  24, 24))
+                            # Same node and overlapping — already visually
+                            # one line; nothing to draw.
+                            continue
+                        a, b, axis = ov
+                        shifts.append((a, b, axis))
+                        bbox = bbox.united(QRectF(a.x() - 8, a.y() - 8,
+                                                  (b.x() - a.x()) + 16,
+                                                  (b.y() - a.y()) + 16))
         self._dots = [QPointF(x, y) for (x, y) in dots]
         self._hops = hops
+        self._shifts = shifts
         self._bbox = bbox
 
     # --- Qt overrides ---
@@ -145,6 +189,33 @@ class CrossingsOverlay(QGraphicsItem):
         return self._bbox
 
     def paint(self, painter: QPainter, option, widget=None):
+        # Parallel-overlap shifts — mask the shared span then re-draw the
+        # second wire offset by 6 px so the user sees two separate lines
+        # instead of a single visually-merged line.
+        if self._shifts:
+            offset = 6.0
+            for a, b, axis in self._shifts:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor("#181818")))  # scene bg
+                if axis == 'h':
+                    painter.drawRect(QRectF(a.x() - 1, a.y() - 2,
+                                            (b.x() - a.x()) + 2, 4))
+                else:
+                    painter.drawRect(QRectF(a.x() - 2, a.y() - 1,
+                                            4, (b.y() - a.y()) + 2))
+                pen = QPen(QColor("#88ff88"))
+                pen.setWidth(2)
+                painter.setPen(pen)
+                if axis == 'h':
+                    y = a.y() + offset
+                    painter.drawLine(int(a.x()), int(a.y()), int(a.x()), int(y))
+                    painter.drawLine(int(a.x()), int(y), int(b.x()), int(y))
+                    painter.drawLine(int(b.x()), int(y), int(b.x()), int(b.y()))
+                else:
+                    x = a.x() + offset
+                    painter.drawLine(int(a.x()), int(a.y()), int(x), int(a.y()))
+                    painter.drawLine(int(x), int(a.y()), int(x), int(b.y()))
+                    painter.drawLine(int(x), int(b.y()), int(b.x()), int(b.y()))
         # Dots — same node intersections
         if self._dots:
             painter.setPen(Qt.PenStyle.NoPen)
