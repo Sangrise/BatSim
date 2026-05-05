@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Iterable
 
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
                              QPushButton, QListWidget, QListWidgetItem,
                              QLabel, QFrame)
@@ -101,6 +101,13 @@ class _PlotPanel(QFrame):
         signal still exists. ``default_axis`` overrides for new signals.
         """
         prior = dict(self._axis) if keep_existing else {}
+        # Fast path: same signal set as before → just refresh the curves
+        # without rebuilding the list (avoids selection flicker during
+        # live streaming).
+        if (keep_existing and default_axis is None
+                and list(self._axis.keys()) == list(signals)):
+            self._refresh_plot()
+            return
         self.list.blockSignals(True)
         self.list.clear()
         self._axis.clear()
@@ -200,6 +207,8 @@ def _kind_label(name: str | None) -> str:
 class WaveformView(QWidget):
     """Backwards-compatible name; now hosts multiple panels with dual axes."""
 
+    stopRequested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -212,6 +221,11 @@ class WaveformView(QWidget):
         b_split.clicked.connect(self._split_v_i)
         bar.addWidget(b_add)
         bar.addWidget(b_split)
+        self._stop_btn = QPushButton("■ Stop")
+        self._stop_btn.setStyleSheet("color:#ff7070;")
+        self._stop_btn.setVisible(False)
+        self._stop_btn.clicked.connect(self.stopRequested.emit)
+        bar.addWidget(self._stop_btn)
         bar.addStretch(1)
         self._info = QLabel("No data — run a simulation (Ctrl+R)")
         self._info.setStyleSheet("color:#888;")
@@ -226,6 +240,8 @@ class WaveformView(QWidget):
         self._signal_data: dict[str, list[float]] = {}
         self._available: list[str] = []
         self._user_customised = False  # tracks any post-result panel changes
+        self._streaming = False
+        self._stream_aliases: dict | None = None
 
         self.add_panel()  # start with one
 
@@ -309,10 +325,16 @@ class WaveformView(QWidget):
             arr = I.get(vsname)
             if arr is not None:
                 data[f"I({pid})"] = arr
-        for n, arr in V.items():
-            data.setdefault(f"V({n})", arr)
-        for n, arr in I.items():
-            data.setdefault(f"I({n})", arr)
+        explicit_probes = (bool(aliases.get("voltages"))
+                           or bool(aliases.get("currents")))
+        if not explicit_probes:
+            # No PROBE / IPROBE present → fall back to dumping every
+            # node voltage and every V-source current so the user at
+            # least sees something.
+            for n, arr in V.items():
+                data.setdefault(f"V({n})", arr)
+            for n, arr in I.items():
+                data.setdefault(f"I({n})", arr)
 
         self._signal_data = data
         self._available = list(data.keys())
@@ -331,3 +353,35 @@ class WaveformView(QWidget):
 
         for panel in self._panels:
             panel.set_available_signals(self._available)
+
+    # --- live streaming ---
+    def begin_streaming(self, aliases: dict | None,
+                        t_end: float | None = None) -> None:
+        """Enter live-update mode; show the Stop button and reset state."""
+        self._streaming = True
+        self._stream_aliases = aliases or {"voltages": {}, "currents": {}}
+        self._stop_btn.setVisible(True)
+        self._stop_btn.setEnabled(True)
+        suffix = f" / {t_end:g}s" if t_end else ""
+        self._info.setText(f"▶ live  t=0.000s{suffix}")
+
+    def push_chunk(self, t_partial, V_partial, I_partial) -> None:
+        """Render a partial result while the simulation is still running."""
+        if not self._streaming:
+            return
+        result = {"t": t_partial, "V": V_partial, "I": I_partial}
+        self.show_results(result, aliases=self._stream_aliases)
+        try:
+            t_now = float(t_partial[-1]) if len(t_partial) else 0.0
+        except Exception:
+            t_now = 0.0
+        self._info.setText(f"▶ live  t={t_now:.3f}s · "
+                           f"{len(self._available)} signals")
+
+    def end_streaming(self, final_result: dict | None = None) -> None:
+        """Leave live-update mode; render final result if provided."""
+        self._streaming = False
+        self._stop_btn.setVisible(False)
+        if final_result is not None and len(final_result.get("t", [])):
+            self.show_results(final_result, aliases=self._stream_aliases)
+        self._stream_aliases = None

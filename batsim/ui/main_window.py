@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 
-from PyQt6.QtCore import Qt, QPointF, QTimer
+from PyQt6.QtCore import Qt, QPointF, QTimer, QThread, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QPainter, QKeySequence, QShortcut, QClipboard
 from PyQt6.QtWidgets import (QMainWindow, QGraphicsView, QDockWidget, QFileDialog,
                              QMessageBox, QToolBar, QApplication, QInputDialog)
@@ -27,6 +27,63 @@ from batsim.io.project import save_project, load_project
 
 CLIPBOARD_MIME = "application/x-batsim-graph"
 BLOCKS_DIR = os.path.join(os.path.expanduser("~"), ".batsim", "blocks")
+
+
+class _TransientWorker(QObject):
+    """Runs ``solve_transient`` on a background QThread and emits live
+    waveform chunks throttled by wall-clock time so the UI can redraw
+    like an oscilloscope without freezing."""
+
+    chunk = pyqtSignal(object, object, object, float)  # t, V, I, t_now
+    finished = pyqtSignal(object)                      # final result dict
+    failed = pyqtSignal(str)
+
+    def __init__(self, netlist, t_end: float, dt: float,
+                 throttle_ms: int = 80):
+        super().__init__()
+        self._netlist = netlist
+        self._t_end = float(t_end)
+        self._dt = float(dt)
+        self._throttle = max(throttle_ms, 1) / 1000.0
+        self._stop = False
+
+    @pyqtSlot()
+    def stop(self) -> None:
+        self._stop = True
+
+    @pyqtSlot()
+    def run(self) -> None:
+        import time as _time
+        from batsim.engine.nonlinear import solve_transient as _st
+
+        last_emit = [0.0]
+
+        class _Stopped(Exception):
+            pass
+
+        def on_progress(k, n_steps, ts, V_hist, I_hist):
+            if self._stop:
+                raise _Stopped()
+            now = _time.monotonic()
+            is_last = (k >= n_steps)
+            if not is_last and (now - last_emit[0]) < self._throttle:
+                return
+            last_emit[0] = now
+            sl = slice(0, k + 1)
+            t_part = ts[sl].copy()
+            V_part = {n: a[sl].copy() for n, a in V_hist.items()}
+            I_part = {n: a[sl].copy() for n, a in I_hist.items()}
+            self.chunk.emit(t_part, V_part, I_part, float(ts[k]))
+
+        try:
+            res = _st(self._netlist, t_end=self._t_end, dt=self._dt,
+                      on_progress=on_progress)
+            self.finished.emit(res)
+        except _Stopped:
+            self.finished.emit({"t": [], "V": {}, "I": {}, "system": None,
+                                "stopped": True})
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(str(exc))
 
 
 class SchematicView(QGraphicsView):
@@ -318,6 +375,11 @@ class MainWindow(QMainWindow):
 
     # --- simulation ---
     def run_simulation(self):
+        # Disallow re-entry while another transient is streaming.
+        if getattr(self, "_sim_thread", None) is not None:
+            QMessageBox.information(self, "Simulation",
+                                    "이미 시뮬레이션이 실행 중입니다.")
+            return
         # Pass the current schematic so the dialog can compute t_end
         # from PCS cycle steps via the "Auto from PCS cycle" button.
         class _Bag:
@@ -329,8 +391,6 @@ class MainWindow(QMainWindow):
             return
         cfg = dlg.result_settings()
         graph = self.scene.to_graph()
-        # Attach battery model objects via the plugin registry (supports
-        # data-driven cells and any user-registered model).
         for c in graph["components"]:
             if c["kind"] == "BATTERY":
                 p = c["params"]
@@ -340,21 +400,93 @@ class MainWindow(QMainWindow):
                 c["model"] = make_battery(model_name=model_name, cell=cell, **kwargs)
         try:
             netlist = from_graph(graph)
-            if cfg["kind"] == "DC operating point":
+        except Exception as exc:
+            QMessageBox.critical(self, "Simulation error", str(exc))
+            return
+
+        if cfg["kind"] == "DC operating point":
+            try:
                 sys, x = solve_dc(netlist)
                 volts = sys.node_voltages(x)
                 msg = "\n".join(f"V({n}) = {v:.4f} V" for n, v in sorted(volts.items()))
                 QMessageBox.information(self, "DC operating point", msg or "(empty)")
-            else:
-                result = solve_transient(netlist, t_end=cfg["t_end"], dt=cfg["dt"])
-                aliases = probe_map(graph)
-                self.waveform.show_results(result, aliases=aliases)
-                npr = len(aliases["voltages"]) + len(aliases["currents"])
-                self.statusBar().showMessage(
-                    f"Transient done: {len(result['t'])} steps over {cfg['t_end']} s · "
-                    f"{npr} probe(s) found")
-        except Exception as exc:  # surface engine errors to the user
-            QMessageBox.critical(self, "Simulation error", str(exc))
+            except Exception as exc:
+                QMessageBox.critical(self, "Simulation error", str(exc))
+            return
+
+        # --- Transient: stream waveforms live via worker thread ---
+        aliases = probe_map(graph)
+        self.waveform.begin_streaming(aliases, t_end=cfg["t_end"])
+
+        thread = QThread(self)
+        worker = _TransientWorker(netlist, t_end=cfg["t_end"], dt=cfg["dt"])
+        worker.moveToThread(thread)
+        self._sim_thread = thread
+        self._sim_worker = worker
+        self._sim_t_end = float(cfg["t_end"])
+        self._sim_aliases = aliases
+
+        thread.started.connect(worker.run)
+        worker.chunk.connect(self._on_sim_chunk)
+        worker.finished.connect(self._on_sim_finished)
+        worker.failed.connect(self._on_sim_failed)
+        try:
+            self.waveform.stopRequested.disconnect()
+        except TypeError:
+            pass
+        self.waveform.stopRequested.connect(worker.stop)
+
+        self.statusBar().showMessage(
+            f"Transient running… t_end={cfg['t_end']} s · dt={cfg['dt']} s")
+        thread.start()
+
+    @pyqtSlot(object, object, object, float)
+    def _on_sim_chunk(self, t_part, V_part, I_part, t_now):
+        self.waveform.push_chunk(t_part, V_part, I_part)
+        if self._sim_t_end > 0:
+            pct = min(100, int(100.0 * t_now / self._sim_t_end))
+        else:
+            pct = 0
+        self.statusBar().showMessage(
+            f"Transient running… t={t_now:.3f}s / {self._sim_t_end:g}s ({pct}%)")
+
+    @pyqtSlot(object)
+    def _on_sim_finished(self, result):
+        self.waveform.end_streaming(result)
+        self._teardown_sim_thread()
+        n_steps = len(result.get("t", []) or [])
+        if result.get("stopped"):
+            self.statusBar().showMessage("Transient stopped by user.")
+        else:
+            npr = (len(self._sim_aliases.get("voltages", {})) +
+                   len(self._sim_aliases.get("currents", {})))
+            self.statusBar().showMessage(
+                f"Transient done: {n_steps} steps over {self._sim_t_end:g} s · "
+                f"{npr} probe(s) found")
+
+    @pyqtSlot(str)
+    def _on_sim_failed(self, msg):
+        self.waveform.end_streaming(None)
+        self._teardown_sim_thread()
+        self.statusBar().showMessage("Transient failed.")
+        QMessageBox.critical(self, "Simulation error", msg)
+
+    def _teardown_sim_thread(self):
+        thread = getattr(self, "_sim_thread", None)
+        worker = getattr(self, "_sim_worker", None)
+        if thread is not None:
+            thread.quit()
+            thread.wait(2000)
+            thread.deleteLater()
+        if worker is not None:
+            worker.deleteLater()
+        self._sim_thread = None
+        self._sim_worker = None
+        self._sim_aliases = None
+        try:
+            self.waveform.stopRequested.disconnect()
+        except TypeError:
+            pass
 
     # --- copy / paste / blocks ---
     def _selection_subgraph(self) -> dict | None:

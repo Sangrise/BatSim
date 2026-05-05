@@ -218,7 +218,8 @@ def solve_dc(netlist: Netlist):
     return sys, x
 
 
-def solve_transient(netlist: Netlist, t_end: float, dt: float, on_step=None):
+def solve_transient(netlist: Netlist, t_end: float, dt: float, on_step=None,
+                    on_progress=None):
     from .pcs_control import update_pcs_controllers
     sys = NonlinearMNASystem(netlist)
     nonlinear = _has_nonlinear(netlist)
@@ -269,5 +270,7 @@ def solve_transient(netlist: Netlist, t_end: float, dt: float, on_step=None):
                     e.params["_V_dc_last"] = 0.0
         if on_step is not None:
             on_step(k, tval, x)
+        if on_progress is not None:
+            on_progress(k, n_steps, ts, V_hist, I_hist)
 
     return {"t": ts, "V": V_hist, "I": I_hist, "system": sys}

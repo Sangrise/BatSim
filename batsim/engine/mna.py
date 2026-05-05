@@ -283,7 +283,7 @@ def solve_dc(netlist: Netlist) -> tuple[MNASystem, np.ndarray]:
 
 
 def solve_transient(netlist: Netlist, t_end: float, dt: float,
-                    on_step=None) -> dict:
+                    on_step=None, on_progress=None) -> dict:
     """Backward Euler transient. Returns time series of node voltages and
     voltage-source currents (which include battery currents)."""
     sys = MNASystem(netlist)
@@ -315,5 +315,7 @@ def solve_transient(netlist: Netlist, t_end: float, dt: float,
                 e.model.update(I=I_batt, dt=dt if k > 0 else 0.0, t=t)
         if on_step is not None:
             on_step(k, t, x)
+        if on_progress is not None:
+            on_progress(k, n_steps, ts, V_hist, I_hist)
 
     return {"t": ts, "V": V_hist, "I": I_hist, "system": sys}
