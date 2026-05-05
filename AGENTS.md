@@ -288,7 +288,8 @@ peak = `V_rms·√2`, ω = `2π·freq`.  Pin 1 (neutral) is auto-grounded.
 
 | mode           | description | key params |
 |----------------|-------------|------------|
-| `CYCLE_SIMPLE` | **Recommended cycler.** chg_cc → rest → dis_cc → rest, repeat × `cyc_count`. Charge until V_pack≥cyc_V_max, discharge until V_pack≤cyc_V_min. | `cyc_I_chg, cyc_I_dis, cyc_V_max, cyc_V_min, cyc_t_rest, cyc_count` |
+| `CYCLE`        | **Recommended cycler.** Step-list executed in order; each step has a Type (Charge/Discharge CC or CP, CV, Rest) plus optional V/I/time terminators.  Edit via the **Cycle Steps Editor** dialog (PNE-cycler-style table) launched from the Inspector's `cycle_steps` field. | `cycle_steps` (JSON), `cycle_repeat` |
+| `CYCLE_SIMPLE` | Legacy 7-parameter cycler: chg_cc → rest → dis_cc → rest, repeat × `cyc_count`. | `cyc_I_chg, cyc_I_dis, cyc_V_max, cyc_V_min, cyc_t_rest, cyc_count` |
 | `V_DC`  | Stiff DC voltage source | `V_DC_set` |
 | `I_DC`  | Stiff DC current injector | `I_DC_set` |
 | `P_DC`  | Constant DC power | `P_DC_set` |
@@ -297,10 +298,30 @@ peak = `V_rms·√2`, ω = `2π·freq`.  Pin 1 (neutral) is auto-grounded.
 | `CP`    | Constant power (profile) | `P_set` |
 | `CCCV`  | CC until `V≥V_max`, then CV; terminate when `|I|≤I_term` | `I_set, V_max, I_term` |
 | `CPCV`  | CP until `V≥V_max`, then CV; terminate when `|I|≤I_term` | `P_set, V_max, I_term` |
-| `CYCLE` | Advanced JSON-step list executed in order | `cycle_steps` (JSON), `cycle_repeat` |
 
 **Sign convention (user-facing)** — `+` = charging, `−` = discharging
 for `I_set / I_DC_set / P_set / P_DC_set` and `cyc_I_chg`.
+
+**Per-cell V termination (series packs)** — for any V threshold key
+(`V_max`, `V_min`, `cyc_V_max`, `cyc_V_min`, plus the `V_max`/`V_min`
+inside `cycle_steps`), append `_cell` (e.g. `V_max_cell`,
+`cyc_V_min_cell`, `V_max_cell` inside a step) to express the limit
+**per cell**. The controller multiplies it by `n_series` (PCS param,
+default 1) to obtain the pack-level threshold. The Cycle Steps dialog
+exposes this as a "Per-cell V limits (×N series)" toggle. `_cell`
+keys take precedence when both are present.
+
+**Cycle-time auto-estimate** — `_estimate_pcs_total_time`
+(simulation_dialog.py) now uses an energy/power heuristic for CC and
+CP steps (`t ≈ 3600 · Ah · V_nom / |P|`) capped by `max_time`, instead
+of blindly summing the safety-cap `max_time` of every step. Greatly
+improves the "Auto from PCS cycle" button accuracy.
+
+**Waveform filtering with explicit probes** — when at least one PROBE
+or IPROBE is present, `WaveformView.show_results()` suppresses the
+default "every node voltage / every V-source current" dump and shows
+only the named `V(P*)` / `I(IP*)` aliases. Drop a PROBE/IPROBE if you
+want a focused view; place none for full visibility.
 
 **Internal note** (don't break this) — `_set_active(elem, "I_DC", i=...)`
 uses the *MNA stamp* sign: charging is `i = -|I_chg|` because
@@ -309,6 +330,38 @@ the network's KCL but the resulting battery `vs_current` (positive =
 discharge by battery convention) ends up with the opposite sign. The
 CYCLE_SIMPLE / CYCLE handlers already handle the flip; only touch this
 if you also re-derive the stamp.
+
+**⚠ KNOWN INVERTED CONVENTION (CYCLE / CC / CP / CCCV / CPCV)** — the
+non-`_SIMPLE` modes pass `I_step` / `P_step` to `_set_active` *without*
+the `-|·|` flip that CYCLE_SIMPLE applies.  Net effect at the battery:
+**`+I_set / +P_set` actually DISCHARGES the battery, `−` CHARGES.**
+Verified empirically (CC `+25A` for 120s on a SOC=0.5, 100Ah pack →
+SOC drops to 0.4917).  The unit tests
+(`test_pcs_profiles.py::test_pcs_cc_charge_current_steady`,
+`test_pcs_cycle_alternates_charge_rest_discharge`) only assert that
+`I_PCS` *equals* `I_set` — they are sign-blind on actual SOC change,
+so the bug has been latent.  The example
+`examples/grid_pcs_2bat_cycle.batsim` is authored against the actual
+(inverted) convention: step 0 = `CP −50` (= charge), step 2 =
+`CP +50` (= discharge).  When fixing this for real, you must
+simultaneously: (a) flip the I_DC stamp at `mna.py:216` to
+`_stamp_current(b, e.nodes[2], e.nodes[3], I_dc)`, (b) flip the P_DC
+Norton orientation in `nonlinear.py::_stamp_pcs_dc_pmode`, (c) flip
+sign of stored `I_PCS` so the existing tests still pass, **and**
+(d) flip the example file's `cycle_steps` back to the natural
+`+ = charge` form.  Until then: document the workaround in the UI
+and in any new examples.
+
+**PCS Newton stamp fix (commit `60f5f63`)** — `_stamp_pcs_dc_pmode`
+previously used `g = −P/V²` for the source-side admittance, which
+caused 3× over-injection at convergence (observer reported `I=P/V`
+while actual through-current was `3·P/V`).  Fixed to `g = +P/V²`,
+`Ieq = 2·I0`, and the observer row is now coupled into the DC node
+voltages so `iv = Ieq − g·Vd` returns the actual through-current.
+KCL now holds to machine precision.  Adaptive Newton damping
+(`solve_nonlinear_step`) drops 0.7 → 0.3 once `‖Δx‖∞ > 5.0` after
+iteration 2 because the corrected Norton produces an indefinite
+Jacobian near voltage sign-flips.
 
 **Why CYCLE_SIMPLE has no CV taper** — the battery V-source stamp uses
 the previous step's `self._I` for `V_t = OCV − I·R0 − V_rc`. Forcing
@@ -358,6 +411,8 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
   Left).  After that, panel layout/selections are preserved across runs
   and the user can `+ Add plot` or `Split V / I` from the toolbar.
 * Right-axis traces are drawn dashed and tagged "(R)" in the legend.
+* Right axis (ticks + label) is hidden whenever no signal is assigned
+  to it, and reappears the moment a row is cycled to `RIGHT`.
 
 ### CLI (`batsim`)
 * `ui` — launch GUI.
