@@ -114,6 +114,113 @@ CATALOG: dict[str, dict] = {
             ("text", 0, 22, "BAT"),
         ],
     },
+    "BATPACK": {
+        "label": "Battery pack (series/parallel)",
+        "kind": "BATPACK",
+        "pins": 2,
+        "default_params": {
+            "model": "Thevenin",
+            "cell": "",
+            "n_series": 4,
+            "n_parallel": 1,
+            "capacity_Ah": 2.5,
+            "soc0": 1.0,
+            "soc_init_spread": 0.04,
+            "R0": 0.03,
+            "R1": 0.02,
+            "C1": 2000.0,
+            "balancer": "PassiveV1",
+            "balancer_soc_enable": 0.46,
+            "balancer_dev_min":    0.02,
+            "balancer_dev_max":    1.0,
+            "balancer_soc_drop":   0.001,
+            "balancer_I_bal":      1.0,
+            "balancer_pack_pause": 0.05,
+            "balancer_pack_resume":0.08,
+        },
+        "symbol": [
+            ("line", -30, 0, -14, 0),
+            ("line", -14, -14, -14, 14),
+            ("line", -10, -8, -10, 8),
+            ("line", -4, -14, -4, 14),
+            ("line",  0, -8,  0, 8),
+            ("line",  6, -14,  6, 14),
+            ("line", 10, -8, 10, 8),
+            ("line", 14, -14, 14, 14),
+            ("line", 14, 0, 30, 0),
+            ("text", -22, -18, "+"),
+            ("text", 18, -18, "-"),
+            ("text", 0, 24, "PACK"),
+        ],
+    },
+    "BATRACK": {
+        "label": "Battery rack (packs in series)",
+        "kind": "BATRACK",
+        "pins": 2,
+        "default_params": {
+            "model": "Thevenin",
+            "cell": "",
+            "n_packs_series": 4,    # number of BATPACKs stacked in series
+            "n_series": 4,          # cells in series per pack
+            "n_parallel": 1,        # parallel strings per pack
+            "capacity_Ah": 2.5,
+            "soc0": 1.0,
+            "soc_init_spread": 0.04,
+            "R0": 0.03,
+            "R1": 0.02,
+            "C1": 2000.0,
+            # Per-pack balancer (used unless a BMS component overrides it).
+            "balancer": "PassiveV1",
+            "balancer_soc_enable": 0.46,
+            "balancer_dev_min":    0.02,
+            "balancer_dev_max":    1.0,
+            "balancer_soc_drop":   0.001,
+            "balancer_I_bal":      1.0,
+            "balancer_pack_pause": 0.05,
+            "balancer_pack_resume":0.08,
+        },
+        "symbol": [
+            ("line", -30, 0, -22, 0),
+            ("rect", -22, -16, 12, 32),
+            ("rect", -18, -12, 4, 8),
+            ("rect", -18, 4, 4, 8),
+            ("rect", -12, -12, 4, 8),
+            ("rect", -12, 4, 4, 8),
+            ("rect", -6, -12, 4, 8),
+            ("rect", -6, 4, 4, 8),
+            ("line", -10, 0, 22, 0),
+            ("text", -28, -22, "+"),
+            ("text", 18, -22, "-"),
+            ("text", 0, 26, "RACK"),
+        ],
+    },
+    "BMS": {
+        "label": "Battery Management System",
+        "kind": "BMS",
+        "pins": 0,
+        # BMS is a virtual component (no electrical pins).  It declares
+        # which battery components are inside its control domain via the
+        # `targets` parameter (comma-separated component IDs, e.g.
+        # "BR1,BR2") and what balancer logic to push into them.  Use one
+        # BMS per group of batteries; multiple BMSes can coexist with
+        # disjoint target sets.
+        "default_params": {
+            "targets": "",                       # comma-separated battery IDs
+            "balancer": "Inherit",               # "Inherit" = leave per-pack default
+            "balancer_soc_enable": 0.46,
+            "balancer_dev_min":    0.02,
+            "balancer_dev_max":    1.0,
+            "balancer_soc_drop":   0.001,
+            "balancer_I_bal":      1.0,
+            "balancer_pack_pause": 0.05,
+            "balancer_pack_resume":0.08,
+        },
+        "symbol": [
+            ("rect", -30, -16, 60, 32),
+            ("text", 0, -2, "BMS"),
+            ("text", 0, 12, "(controller)"),
+        ],
+    },
     "GND": {
         "label": "Ground",
         "kind": "GND",
@@ -337,6 +444,7 @@ CATALOG: dict[str, dict] = {
         #                         enough.
         "default_params": {
             "mode": "V_DC",
+            "n_series": 1,
             "V_DC_set": 800.0,
             "I_DC_set": 0.0,
             "P_DC_set": 0.0,

@@ -89,19 +89,31 @@ def _apply_simple(elem, sub_mode: str, params: Dict[str, Any]) -> None:
         _set_active(elem, "I_DC", i=0.0)
 
 
-def _check_terminate(state, params, t, V_dc, I_dc, charging: bool) -> bool:
+def _check_terminate(state, params, t, V_dc, I_dc, charging: bool,
+                     n_series: int = 1) -> bool:
     """Return True if any termination condition for the active sub-step
-    is satisfied."""
+    is satisfied.
+
+    Voltage limits may be specified either as pack-level (``V_max`` /
+    ``V_min``) or per-cell (``V_max_cell`` / ``V_min_cell``).  Per-cell
+    values are multiplied by ``n_series`` to compare against the DC bus
+    voltage."""
     t0 = state.get("phase_t0", t)
     if "max_time" in params and (t - t0) >= float(params["max_time"]):
         return True
     if "time" in params and (t - t0) >= float(params["time"]):
         return True
+    V_max = params.get("V_max")
+    V_min = params.get("V_min")
+    if "V_max_cell" in params:
+        V_max = float(params["V_max_cell"]) * max(int(n_series), 1)
+    if "V_min_cell" in params:
+        V_min = float(params["V_min_cell"]) * max(int(n_series), 1)
     if charging:
-        if "V_max" in params and V_dc >= float(params["V_max"]):
+        if V_max is not None and V_dc >= float(V_max):
             return True
     else:
-        if "V_min" in params and V_dc <= float(params["V_min"]):
+        if V_min is not None and V_dc <= float(V_min):
             return True
     if "I_term" in params:
         # |I| dropping below threshold (taper)
@@ -122,6 +134,7 @@ def update_pcs_controllers(netlist, t: float, x_prev, vs_index, node_index,
 def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
     p = elem.params
     mode = str(p.get("mode", "V_DC"))
+    n_series = max(int(p.get("n_series", 1) or 1), 1)
 
     # Measure DC side from previous solution.
     n_pos, n_neg = elem.nodes[2], elem.nodes[3]
@@ -165,6 +178,10 @@ def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
         P_set = float(p.get("P_set", 0.0))
         V_max = float(p.get("V_max", 0.0))
         V_min = float(p.get("V_min", 0.0))
+        if "V_max_cell" in p:
+            V_max = float(p["V_max_cell"]) * n_series
+        if "V_min_cell" in p:
+            V_min = float(p["V_min_cell"]) * n_series
         I_term = float(p.get("I_term", 0.0))
         charging = (I_set >= 0 if mode == "CCCV" else P_set >= 0)
 
@@ -198,6 +215,10 @@ def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
         I_dis = float(p.get("cyc_I_dis", 0.0))   # >0 discharge current cap
         V_max = float(p.get("cyc_V_max", 4.2))
         V_min = float(p.get("cyc_V_min", 3.0))
+        if "cyc_V_max_cell" in p:
+            V_max = float(p["cyc_V_max_cell"]) * n_series
+        if "cyc_V_min_cell" in p:
+            V_min = float(p["cyc_V_min_cell"]) * n_series
         t_rest = float(p.get("cyc_t_rest", 0.0))
         cycles = int(p.get("cyc_count", 1))
 
@@ -282,10 +303,15 @@ def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
         terminate_step = False
         if sm in ("CC", "CV", "CP", "REST"):
             terminate_step = _check_terminate(
-                {"phase_t0": state["phase_t0"]}, step, t, V_dc, I_dc, charging)
+                {"phase_t0": state["phase_t0"]}, step, t, V_dc, I_dc,
+                charging, n_series=n_series)
         elif sm in ("CCCV", "CPCV"):
             V_max = float(step.get("V_max", 0.0))
             V_min = float(step.get("V_min", 0.0))
+            if "V_max_cell" in step:
+                V_max = float(step["V_max_cell"]) * n_series
+            if "V_min_cell" in step:
+                V_min = float(step["V_min_cell"]) * n_series
             I_term = float(step.get("I_term", 0.0))
             if sub in ("CC", "CP"):
                 if charging and V_max > 0 and V_dc >= V_max:
@@ -326,8 +352,14 @@ def _update_one(elem, t, x_prev, vs_index, node_index, n_nodes) -> None:
             elif sub == "CP":
                 _set_active(elem, "P_DC", p=P_step)
             elif sub == "CV":
-                v_target = (float(step.get("V_max", 0.0)) if charging
-                            else float(step.get("V_min", 0.0)))
+                if charging:
+                    v_target = (float(step["V_max_cell"]) * n_series
+                                if "V_max_cell" in step
+                                else float(step.get("V_max", 0.0)))
+                else:
+                    v_target = (float(step["V_min_cell"]) * n_series
+                                if "V_min_cell" in step
+                                else float(step.get("V_min", 0.0)))
                 _set_active(elem, "V_DC", v=v_target)
             else:
                 _set_active(elem, "I_DC", i=0.0)

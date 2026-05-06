@@ -72,7 +72,7 @@ class WireItem(QGraphicsItem):
                 # body interior is still rejected.
                 out.append(it.sceneBoundingRect().adjusted(3, 3, -3, -3))
                 continue
-            out.append(it.sceneBoundingRect().adjusted(-2, -2, 2, 2))
+            out.append(it.sceneBoundingRect().adjusted(-4, -4, 4, 4))
         return out
 
     def refresh(self):

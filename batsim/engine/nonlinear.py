@@ -278,7 +278,7 @@ def solve_transient(netlist: Netlist, t_end: float, dt: float, on_step=None,
         for e in sys.vs_elems:
             I_hist[e.name][k] = sys.vs_current(x, e.name)
         for e in sys.netlist.elements:
-            if e.kind == "BATTERY" and e.model is not None and hasattr(e.model, "update"):
+            if e.kind in ("BATTERY", "BATPACK", "BATRACK") and e.model is not None and hasattr(e.model, "update"):
                 I_batt = sys.vs_current(x, e.name)
                 e.model.update(I=I_batt, dt=dt if k > 0 else 0.0, t=tval)
             if e.kind == "PCS":

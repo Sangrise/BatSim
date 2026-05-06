@@ -1,6 +1,8 @@
 """Right-side parameter inspector for the selected component."""
 from __future__ import annotations
 
+import json
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QComboBox,
                              QLabel, QVBoxLayout, QCheckBox, QHBoxLayout,
@@ -37,7 +39,7 @@ class InspectorWidget(QWidget):
         self._title.setText(f"{comp.cid}  ({comp.kind})")
 
         # For batteries: add a "cell" picker on top to load params from data file.
-        if comp.kind == "BATTERY":
+        if comp.kind in ("BATTERY", "BATPACK", "BATRACK"):
             refresh_if_changed()
             cells = [""] + list_cells()
             cell_box = QComboBox()
@@ -62,12 +64,12 @@ class InspectorWidget(QWidget):
                 "CC":   {"I_set"},
                 "CV":   {"V_set"},
                 "CP":   {"P_set"},
-                "CCCV": {"I_set", "V_max", "V_min", "I_term"},
-                "CPCV": {"P_set", "V_max", "V_min", "I_term"},
+                "CCCV": {"I_set", "V_max", "V_min", "I_term", "n_series"},
+                "CPCV": {"P_set", "V_max", "V_min", "I_term", "n_series"},
                 "CYCLE_SIMPLE": {"cyc_I_chg", "cyc_I_dis", "cyc_V_max",
                                  "cyc_V_min", "cyc_t_rest",
-                                 "cyc_count"},
-                "CYCLE": {"cycle_steps", "cycle_repeat"},
+                                 "cyc_count", "n_series"},
+                "CYCLE": {"cycle_steps", "cycle_repeat", "n_series"},
             }.get(pcs_mode, set())
             pcs_visible = base | relevant
 
@@ -77,10 +79,25 @@ class InspectorWidget(QWidget):
                 continue
             if pcs_visible is not None and key not in pcs_visible:
                 continue
-            if key == "model" and comp.kind == "BATTERY":
+            if key == "model" and comp.kind in ("BATTERY", "BATPACK", "BATRACK"):
                 box = QComboBox()
                 models = list_battery_models() or ["Thevenin"]
                 for name in models:
+                    box.addItem(name)
+                idx = box.findText(str(val))
+                if idx >= 0:
+                    box.setCurrentIndex(idx)
+                box.currentTextChanged.connect(
+                    lambda v, k=key: self._update_param(k, v))
+                self._form.addRow(key, box)
+            elif key == "balancer" and comp.kind in ("BATPACK", "BATRACK", "BMS"):
+                from batsim.bms.cell_balancer import list_balancers
+                box = QComboBox()
+                names = list_balancers()
+                if comp.kind == "BMS":
+                    # "Inherit" lets the BMS leave per-pack defaults alone.
+                    names = ["Inherit"] + [n for n in names if n != "Inherit"]
+                for name in names:
                     box.addItem(name)
                 idx = box.findText(str(val))
                 if idx >= 0:
@@ -108,10 +125,12 @@ class InspectorWidget(QWidget):
                 self._form.addRow(key, box)
             elif key == "mode" and comp.kind == "PCS":
                 box = QComboBox()
-                # CYCLE_SIMPLE first — it's the recommended cycler.
-                for name in ("CYCLE_SIMPLE",
+                # CYCLE first — the recommended cycler with table editor.
+                # CYCLE_SIMPLE remains for users who prefer the legacy
+                # 7-parameter charge-rest-discharge-rest cycler.
+                for name in ("CYCLE", "CYCLE_SIMPLE",
                              "V_DC", "I_DC", "P_DC",
-                             "CC", "CV", "CP", "CCCV", "CPCV", "CYCLE"):
+                             "CC", "CV", "CP", "CCCV", "CPCV"):
                     box.addItem(name)
                 idx = box.findText(str(val))
                 if idx >= 0:
@@ -130,6 +149,40 @@ class InspectorWidget(QWidget):
                 edit = QLineEdit(repr(val))
                 edit.setReadOnly(True)
                 self._form.addRow(key, edit)
+            elif key == "cycle_steps" and comp.kind == "PCS":
+                # Open a step-table editor (PNE-cycler-style) instead of
+                # forcing the user to hand-edit JSON.
+                row = QWidget()
+                hl = QHBoxLayout(row)
+                hl.setContentsMargins(0, 0, 0, 0)
+                preview = QLineEdit(str(val))
+                preview.setReadOnly(True)
+                btn = QPushButton("Edit…")
+                btn.setFixedWidth(56)
+
+                def _open_editor(_=None, e=preview):
+                    from batsim.ui.pcs_cycle_dialog import CycleStepsDialog
+                    raw = self._comp.params.get("cycle_steps", "[]")
+                    try:
+                        steps = raw if isinstance(raw, list) else json.loads(raw)
+                    except Exception:
+                        steps = []
+                    dlg = CycleStepsDialog(
+                        self, steps=steps,
+                        repeat=int(self._comp.params.get("cycle_repeat", 1) or 1),
+                        n_series=int(self._comp.params.get("n_series", 1) or 1))
+                    if dlg.exec():
+                        new_json = dlg.steps_json()
+                        self._comp.params["cycle_steps"] = new_json
+                        self._comp.params["cycle_repeat"] = dlg.repeat()
+                        self._comp.params["n_series"] = dlg.n_series()
+                        e.setText(new_json)
+                        self.set_component(self._comp)
+
+                btn.clicked.connect(_open_editor)
+                hl.addWidget(preview, 1)
+                hl.addWidget(btn)
+                self._form.addRow(key, row)
             elif key in ("csv",) or (isinstance(val, str) and key.endswith("_csv")):
                 row = QWidget()
                 hl = QHBoxLayout(row)

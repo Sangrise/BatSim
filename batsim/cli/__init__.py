@@ -52,8 +52,17 @@ def cmd_list_cells(args):
 
 def cmd_list_bms(args):
     from batsim.plugins import list_bms_profiles
-    for n in list_bms_profiles():
-        print(n)
+    from batsim.plugins.registry import BMS_BLOCKS
+    import batsim.bms  # noqa: F401  — triggers built-in BMS block registration
+    profiles = list_bms_profiles()
+    if profiles:
+        print("# profiles")
+        for n in profiles:
+            print(n)
+    if BMS_BLOCKS:
+        print("# blocks")
+        for n in sorted(BMS_BLOCKS.keys()):
+            print(n)
     return 0
 
 

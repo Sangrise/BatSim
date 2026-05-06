@@ -22,7 +22,7 @@ class MNASystem:
         # Voltage-source-like elements need an extra current unknown.
         self.vs_elems: list[Element] = []
         for e in netlist.elements:
-            if e.kind in ("V", "L", "BATTERY", "IPROBE", "TR", "GRID"):
+            if e.kind in ("V", "L", "BATTERY", "BATPACK", "BATRACK", "IPROBE", "TR", "GRID"):
                 self.vs_elems.append(e)
             elif e.kind == "BUS" and str(e.params.get("mode", "Grid")) == "Grid":
                 self.vs_elems.append(e)
@@ -140,6 +140,24 @@ class MNASystem:
 
             elif e.kind == "BATTERY":
                 # Delegate to model.stamp(); falls back to ideal V if no model.
+                model = e.model
+                idx = self.vs_index[e.name]
+                if model is not None and hasattr(model, "terminal_voltage"):
+                    Vt = float(model.terminal_voltage(t, dt))
+                else:
+                    Vt = float(e.params.get("V", 3.7))
+                self._stamp_vsource(A, b, idx, e.nodes[0], e.nodes[1], Vt)
+
+            elif e.kind == "BATPACK":
+                model = e.model
+                idx = self.vs_index[e.name]
+                if model is not None and hasattr(model, "terminal_voltage"):
+                    Vt = float(model.terminal_voltage(t, dt))
+                else:
+                    Vt = float(e.params.get("V", 3.7))
+                self._stamp_vsource(A, b, idx, e.nodes[0], e.nodes[1], Vt)
+
+            elif e.kind == "BATRACK":
                 model = e.model
                 idx = self.vs_index[e.name]
                 if model is not None and hasattr(model, "terminal_voltage"):
@@ -309,7 +327,7 @@ def solve_transient(netlist: Netlist, t_end: float, dt: float,
             I_hist[e.name][k] = sys.vs_current(x, e.name)
         # Allow models (e.g., battery) to update internal state
         for e in sys.netlist.elements:
-            if e.kind == "BATTERY" and e.model is not None and hasattr(e.model, "update"):
+            if e.kind in ("BATTERY", "BATPACK", "BATRACK") and e.model is not None and hasattr(e.model, "update"):
                 I_batt = sys.vs_current(x, e.name)
                 # Convention: positive current = discharging (out of + terminal)
                 e.model.update(I=I_batt, dt=dt if k > 0 else 0.0, t=t)

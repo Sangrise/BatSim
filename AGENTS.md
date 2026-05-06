@@ -208,6 +208,77 @@ Key invariants enforced in code (don't break these):
 
 ### Battery / BMS
 * Built-in models: Rint, Thevenin, n-RC, SPM, DataDriven.
+* **Series/parallel pack component (`BATPACK`)** — single 2-terminal symbol
+  representing `n_series × n_parallel` independent inner cells.  Pack
+  terminal V = sum over series rows of (mean parallel cell V); pack
+  current is split evenly across strings.  All cells share the same
+  `model` / `cell` preset and per-cell parameters (`R0`, `R1`, `C1`,
+  `capacity_Ah`, `soc0`).  ``soc_init_spread`` injects a deterministic
+  per-cell SOC offset so balancing has work to do without hand-edits.
+* **Rack component (`BATRACK`)** — single 2-terminal symbol representing
+  `n_packs_series` BATPACKs stacked in series.  Terminal V = Σ pack
+  voltages; the same current flows through every pack.  Inherits all of
+  BATPACK's per-cell knobs plus `n_packs_series`.  Each inner pack owns
+  its own per-string balancers (one per `n_parallel` string).
+* **BMS component (`BMS`)** — virtual (non-electrical, `pins=0`)
+  controller that owns a *control domain* of one or more battery
+  components.  Parameters:
+  - `targets`: comma-separated list of battery component IDs
+    (BATTERY/BATPACK/BATRACK), e.g. `"BR1,BR2"`.  Empty = controls
+    nothing.
+  - `balancer`: combo box.  `Inherit` (default) leaves each target's
+    own balancer alone; any other algorithm (e.g. `PassiveV1`) is
+    pushed into every targeted model via `model.set_balancer(...)`,
+    overriding what was configured per-pack.
+  - `balancer_*`: same tunables as on BATPACK (`soc_enable`, `dev_min`,
+    `dev_max`, `soc_drop`, `I_bal`, `pack_pause`, `pack_resume`,
+    `rest_min`, `I_rest`).
+  Multiple BMSes can coexist with disjoint target sets — one BMS for
+  many racks (uniform logic), or one BMS per rack (independent logic).
+  BMS components are dropped from the netlist (no MNA stamp) and
+  applied as a post-processing pass at the end of `from_graph`.
+* **Per-cell measurement surface** (BATPACK / BATRACK):
+  - Every series-stacked cell has its own `V_cell` (cached in
+    `terminal_voltage`), `T_cell` (default 25 °C), and `I_cell`
+    (per-string current after balancer bleed — kept for the future
+    thermal model, not exposed as a probe).
+  - Pack/rack expose `cell_voltages()` (2D / 3D nested lists matching
+    `cells` / `packs`) and `cell_temperatures()` for read-back.
+  - Rack also exposes `pack_voltages()` for series-stacked pack V.
+  - Current is measured **once per pack/rack** via `I_pack` / `I_rack`
+    properties — series-stacked cells/packs see identical current, so
+    no per-cell I probe is needed.
+  - **Thermal hook (placeholder)**: `set_thermal_model(factory)` on
+    pack or rack installs a per-cell object exposing
+    `update(I_cell, V_cell, dt, t) -> T_new`.  Pack `update()` calls
+    it once per cell per step and writes the result to `cell.T_cell`.
+    No built-in thermal model yet — slot reserved for a future feature.
+* **Cell balancer** — combo box on `BATPACK.balancer`:
+  - `None` — balancing disabled.
+  - `PassiveV1` — series-string passive bleed.  Per-cell trigger:
+    `cell SOC ≥ balancer_soc_enable` (default 0.46) AND
+    `balancer_dev_min ≤ (cell SOC − min cell SOC) < balancer_dev_max`
+    (defaults 0.02 and 1.0; `dev_max` excludes outlier cells whose
+    deviation from the min is implausibly large).
+    When triggered, the cell bleeds at `balancer_I_bal` A (default 1A)
+    for the duration needed to drop `balancer_soc_drop` of SOC at that
+    current (`Δt = soc_drop·Q·3600/I`).  Once a slot is started it runs
+    to completion regardless of pack charge/discharge/rest.  Pack-level
+    pause/resume hysteresis on average SOC: pause at
+    `balancer_pack_pause` (default 0.05), resume at
+    `balancer_pack_resume` (default 0.08).  Active slots are frozen
+    (timer doesn't tick) while paused.
+    **Continuous-rest gate**: a *new* slot only starts after the pack
+    has been at rest (`|I_pack| ≤ balancer_I_rest`, default 0.05 A)
+    for at least `balancer_rest_min` seconds (default 1800 = 30 min).
+    The `_rest_dur` accumulator resets to 0 the moment rest is broken.
+    Already-running slots are unaffected — they continue draining
+    through subsequent charge/discharge until their own timer expires.
+  All `balancer_*` thresholds are user-editable via the Inspector.
+  New algorithms register via `@register_balancer("Name")` in
+  `batsim/bms/cell_balancer.py` — the decorator also auto-publishes the
+  class to the global `BMS_BLOCKS` registry under `balancer:<Name>` so
+  it appears in `batsim list-bms`.
 * **No built-in chemistry presets.** Real cell data must be supplied
   via a CSV folder under `data/cells/<your-cell>/` (see
   `batsim/plugins/loader.py`):

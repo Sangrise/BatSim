@@ -180,6 +180,9 @@ def test_waveform_view_aliases_probes():
     w.show_results(fake_result, aliases=aliases)
     assert "V(P1)" in w._available
     assert "I(IP1)" in w._available
+    # When explicit probes are present, raw node voltages are filtered
+    # out so the user only sees the signals they asked for.
+    assert "V(n1)" not in w._available
     # First simulation auto-splits into V panel + I panel
     assert len(w._panels) == 2
     v_axis = w._panels[0].axis_state()
@@ -190,7 +193,7 @@ def test_waveform_view_aliases_probes():
     panel3 = w.add_panel()
     assert len(w._panels) == 3
     panel3.set_available_signals(w._available,
-                                 default_axis={"V(n1)": 1},
+                                 default_axis={"V(P1)": 1},
                                  keep_existing=False)
-    assert panel3.axis_state().get("V(n1)") == 1
+    assert panel3.axis_state().get("V(P1)") == 1
     w.close()
