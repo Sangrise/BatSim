@@ -1,8 +1,8 @@
 """BUS (Grid/Load) and TR (transformer) component regression tests."""
 from __future__ import annotations
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
 
 
 def _comp(cid, kind, params, pins=2):
@@ -122,3 +122,4 @@ def test_bus_anchor_priority_over_battery():
         if e.name == "G1":
             g1_neg = e.nodes[1]
     assert g1_neg == "0"
+

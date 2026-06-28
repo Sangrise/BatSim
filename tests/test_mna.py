@@ -1,6 +1,6 @@
 import numpy as np
-from batsim.engine.netlist import Netlist, Element
-from batsim.engine.mna import solve_dc, solve_transient
+from batsim_core.engine.netlist import Netlist, Element
+from batsim_core.engine.mna import solve_dc, solve_transient
 
 
 def test_voltage_divider_dc():
@@ -26,7 +26,7 @@ def test_rc_transient_charging():
 
 
 def test_battery_rint_dc():
-    from batsim.models.rint import RintModel
+    from batsim_core.models.rint import RintModel
     nl = Netlist()
     nl.add(Element("BATTERY", "B1", ["n1", "0"],
                    {"capacity_Ah": 2.5, "soc0": 1.0, "R0": 0.05},
@@ -36,3 +36,4 @@ def test_battery_rint_dc():
     v = sys.node_voltages(x)
     # OCV(1.0) ~ 3.0 + 1.2 - 0 + 0 = 4.2, with R0=0.05 + Rload=1.0 -> V_t close to 4.2*1/(1.05)
     assert 3.5 < v["n1"] < 4.3
+

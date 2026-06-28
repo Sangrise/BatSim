@@ -2,12 +2,12 @@
 PassiveV1 cell-balancing algorithm."""
 from __future__ import annotations
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
-from batsim.bms.cell_balancer import (PassiveBalancerV1, list_balancers,
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
+from batsim_core.bms.cell_balancer import (PassiveBalancerV1, list_balancers,
                                       make_balancer)
-from batsim.models.pack import BatteryPackModel
-from batsim.plugins import discover
+from batsim_core.models.pack import BatteryPackModel
+from batsim_core.plugins import discover
 
 discover()
 
@@ -160,8 +160,8 @@ def test_passive_v1_registered_as_bms_block():
     # Cell balancing is a BMS function; algorithms must show up in the
     # global BMS registry (used by `batsim list-bms`) under a "balancer:"
     # prefix.
-    import batsim.bms  # noqa: F401  — triggers registration
-    from batsim.plugins.registry import BMS_BLOCKS
+    import batsim_core.bms  # noqa: F401  — triggers registration
+    from batsim_core.plugins.registry import BMS_BLOCKS
     assert "balancer:PassiveV1" in BMS_BLOCKS
     assert BMS_BLOCKS["balancer:PassiveV1"] is PassiveBalancerV1
 
@@ -314,3 +314,4 @@ def test_passive_v1_active_slot_continues_when_rest_breaks():
     for _ in range(2):
         out = bal.bleed_currents(cells, dt=1.0, t=0.0, I_pack=20.0)
         assert out[0] == 1.0
+

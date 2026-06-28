@@ -6,7 +6,7 @@ Run::
         --algorithm SimpleEKF SmoothedCC \
         --cell INR18650-25R --current 1.0 --t-end 1800 --dt 1.0
 """
-from batsim.soc import register_soc_algorithm
+from batsim_core.soc import register_soc_algorithm
 
 
 @register_soc_algorithm("SimpleEKF")
@@ -27,7 +27,7 @@ class SimpleEKF:
         self.R = R
 
     def _ocv(self, soc):
-        from batsim.models.base import default_ocv
+        from batsim_core.models.base import default_ocv
         return default_ocv(soc)
 
     def _docv(self, soc, eps=1e-4):
@@ -58,3 +58,4 @@ def smoothed_cc(state, I, V, dt):
     state["soc"] -= state["I_filt"] * dt / 3600.0 / state["cap"]
     state["soc"] = max(0.0, min(1.0, state["soc"]))
     return state["soc"]
+

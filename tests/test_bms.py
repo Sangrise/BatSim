@@ -1,6 +1,6 @@
-from batsim.bms.protection import Protector, ProtectionLimits
-from batsim.bms.balancer import PassiveBalancer
-from batsim.bms.soc_estimator import CoulombCounter
+from batsim_core.bms.protection import Protector, ProtectionLimits
+from batsim_core.bms.balancer import PassiveBalancer
+from batsim_core.bms.soc_estimator import CoulombCounter
 
 
 def test_protection_overvoltage():
@@ -20,3 +20,4 @@ def test_coulomb_counter():
     cc = CoulombCounter(capacity_Ah=2.0, soc0=1.0)
     cc.update(I=2.0, dt=3600.0)  # 1 full discharge
     assert abs(cc.soc) < 1e-9
+

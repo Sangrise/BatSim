@@ -28,7 +28,7 @@ A cell file uses this schema:
 }
 ```
 
-Restart BatSim. The new cell appears in the Inspector → "cell (preset)"
+Restart batsim_core. The new cell appears in the Inspector → "cell (preset)"
 dropdown when a `BATTERY` component is selected. Selecting it copies the
 parameters into the component.
 
@@ -39,8 +39,8 @@ Create a `.py` file under `~/.batsim/plugins/`, or set the
 
 ```python
 # my_chem.py
-from batsim.models.base import BatteryModel
-from batsim.plugins.registry import register_battery_model
+from batsim_core.models.base import BatteryModel
+from batsim_core.plugins.registry import register_battery_model
 
 @register_battery_model("MyChem")
 class MyChemModel(BatteryModel):
@@ -55,7 +55,7 @@ class MyChemModel(BatteryModel):
 The same decorator pattern works for BMS blocks:
 
 ```python
-from batsim.plugins.registry import register_bms_block
+from batsim_core.plugins.registry import register_bms_block
 
 @register_bms_block("MyController")
 class MyController:
@@ -73,3 +73,5 @@ Every model registered in the plugin registry is selectable per-component
 from the Inspector → `model` dropdown. There is no need to edit code or
 the schematic; settings are stored in the `.batsim` project file as
 `{"model": "Rint", ...}`.
+
+

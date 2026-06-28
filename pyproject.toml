@@ -20,7 +20,8 @@ dev = ["pytest>=7.4"]
 advanced = ["pybamm>=24.1"]
 
 [project.scripts]
-batsim = "batsim.cli:main"
+batsim = "batsim_core.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["batsim*"]
+include = ["batsim_core*"]
+

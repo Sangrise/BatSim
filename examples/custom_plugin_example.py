@@ -3,8 +3,8 @@
 Place a copy of this file at ~/.batsim/plugins/ to load it automatically,
 or point the BATSIM_PLUGIN_PATH env var at this folder.
 """
-from batsim.models.base import BatteryModel
-from batsim.plugins.registry import register_battery_model
+from batsim_core.models.base import BatteryModel
+from batsim_core.plugins.registry import register_battery_model
 
 
 @register_battery_model("LinearOCV")
@@ -22,3 +22,5 @@ class LinearOCVModel(BatteryModel):
     def update(self, I, dt, t):
         self._I = I
         super().update(I, dt, t)
+
+

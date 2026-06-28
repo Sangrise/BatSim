@@ -4,9 +4,9 @@ from __future__ import annotations
 import math
 import numpy as np
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
-from batsim.engine.sources import make_sine_waveform
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
+from batsim_core.engine.sources import make_sine_waveform
 
 
 def _comp(cid, kind, params, pins=2):
@@ -128,3 +128,4 @@ def test_pcs_anchors_dc_minus_to_ground():
     nl = from_graph(g)
     pcs_dc_neg = next(e.nodes[3] for e in nl.elements if e.name == "PCS1")
     assert pcs_dc_neg == "0"
+

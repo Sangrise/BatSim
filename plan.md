@@ -16,8 +16,8 @@ Pure Python (PyQt6 + NumPy/SciPy) 으로 구현.
 ## 2. Architecture (모듈 구성)
 
 ```
-BatSim/
-├── batsim/
+batsim_core/
+├── batsim_core/
 │   ├── __init__.py
 │   ├── app.py                  # 진입점 (QApplication)
 │   ├── ui/                     # PyQt6 GUI
@@ -62,7 +62,7 @@ BatSim/
 │   │   └── export.py           # CSV/PNG/SPICE netlist 내보내기
 │   └── utils/
 │       └── logging.py
-├── resources/
+├── assets/
 │   ├── icons/                  # 부품 SVG 심볼
 │   └── examples/               # 샘플 회로 (.batsim)
 ├── tests/
@@ -140,3 +140,5 @@ BatSim/
 - 사용자가 GUI에서 V-source + R + Battery(Thevenin) + Load 회로를 드래그로 구성.
 - "Run Transient" 클릭 → 1초간 시뮬, 배터리 단자전압/SOC/전류 파형 확인.
 - 프로젝트를 .batsim 으로 저장/로드 가능.
+
+

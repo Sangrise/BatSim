@@ -1,6 +1,6 @@
 """Tests for PROBE / IPROBE measurement points."""
-from batsim.engine.netlist import from_graph, probe_map
-from batsim.engine.mna import MNASystem
+from batsim_core.engine.netlist import from_graph, probe_map
+from batsim_core.engine.mna import MNASystem
 import numpy as np
 
 
@@ -112,7 +112,7 @@ def test_iprobe_dropped_in_empty_space_is_refused():
     import sys
     from PyQt6.QtCore import QPointF
     from PyQt6.QtWidgets import QApplication
-    from batsim.ui.canvas.scene import SchematicScene
+    from batsim_core.ui.canvas.scene import SchematicScene
     app = QApplication.instance() or QApplication(sys.argv)
     sc = SchematicScene()
     sc.add_component("R", QPointF(-100, 0))
@@ -129,7 +129,7 @@ def test_iprobe_dropped_on_wire_auto_splits():
     import sys
     from PyQt6.QtCore import QPointF
     from PyQt6.QtWidgets import QApplication
-    from batsim.ui.canvas.scene import SchematicScene
+    from batsim_core.ui.canvas.scene import SchematicScene
 
     app = QApplication.instance() or QApplication(sys.argv)
     sc = SchematicScene()
@@ -168,7 +168,7 @@ def test_waveform_view_aliases_probes():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
-    from batsim.ui.waveform_view import WaveformView
+    from batsim_core.ui.waveform_view import WaveformView
     w = WaveformView()
     fake_result = {
         "t": [0.0, 1.0, 2.0],
@@ -197,3 +197,4 @@ def test_waveform_view_aliases_probes():
                                  keep_existing=False)
     assert panel3.axis_state().get("V(P1)") == 1
     w.close()
+

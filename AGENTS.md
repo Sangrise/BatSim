@@ -36,7 +36,7 @@ on battery & BMS systems.
 
 ```
 BatSim/
-├─ batsim/                       # Python package (solver + UI + plugins)
+├─ batsim_core/                  # Python package (solver + UI + plugins)
 │  ├─ __init__.py, __main__.py, app.py
 │  ├─ engine/                    # MNA, netlist, non-linear DC/transient
 │  ├─ models/                    # Rint, Thevenin, n_rc, spm, data_driven
@@ -64,13 +64,13 @@ BatSim/
 │  ├─ cli/                       # `batsim` command — list/run/sweep/
 │  │                             # cell-test/soc-eval
 │  └─ io/project.py              # save/load .batsim JSON
-├─ tests/                        # pytest — 47 tests, all green
+├─ tests/                        # pytest — 111 tests, all green
 ├─ data/cells/*.json             # built-in cell presets
 ├─ examples/                     # external_soc_example.py, sweep config
-├─ resources/help/
+├─ assets/help/
 │  ├─ manual_en.html, manual_ko.html
 │  └─ img/*.png                  # screenshots used by the manuals
-├─ scripts/make_manual_screens.py# regenerate manual screenshots
+├─ tools/make_manual_screens.py  # regenerate manual screenshots
 ├─ docs/EXTENDING.md             # short extension cheat-sheet
 ├─ plan.md                       # phase-by-phase development plan
 └─ AGENTS.md                     # this file
@@ -118,7 +118,7 @@ BatSim/
         ▪ resolves model+cell                ▪ multi-panel plots
         ▪ loads JSON from data/cells/        ▪ probe alias map
         ▪ discovers plug-ins from
-          batsim/plugins/builtin and
+          batsim_core/plugins/builtin and
           ~/.batsim/plugins (+BATSIM_PLUGIN_PATH)
 
        cli.__init__ : argparse subcommands ── shares engine + plugins
@@ -169,7 +169,7 @@ Key invariants enforced in code (don't break these):
   rotate, mirror, drag-move).  Cached `_wf` waveforms and battery
   `model` instances are stripped before comparing snapshots so volatile
   state never produces phantom undo entries.
-* **Outline panel** (`batsim/ui/outline.py`) — right-side dock listing
+* **Outline panel** (`batsim_core/ui/outline.py`) — right-side dock listing
   every component and wire; selection is bidirectional with the canvas.
 * **Blocks** — Ctrl+G saves selection to `~/.batsim/blocks/<name>.json`,
   Edit→Insert block menu lists them.
@@ -276,12 +276,12 @@ Key invariants enforced in code (don't break these):
     through subsequent charge/discharge until their own timer expires.
   All `balancer_*` thresholds are user-editable via the Inspector.
   New algorithms register via `@register_balancer("Name")` in
-  `batsim/bms/cell_balancer.py` — the decorator also auto-publishes the
+  `batsim_core/bms/cell_balancer.py` — the decorator also auto-publishes the
   class to the global `BMS_BLOCKS` registry under `balancer:<Name>` so
   it appears in `batsim list-bms`.
 * **No built-in chemistry presets.** Real cell data must be supplied
   via a CSV folder under `data/cells/<your-cell>/` (see
-  `batsim/plugins/loader.py`):
+  `batsim_core/plugins/loader.py`):
   - `meta.csv`  key/value (name, model, capacity_Ah, R0, ...)
   - `ocv.csv`   header `soc,V_oc` → params["ocv_table"]
   - `ocv_chg.csv`, `ocv_dch.csv` (optional — hysteresis)
@@ -295,7 +295,7 @@ Key invariants enforced in code (don't break these):
   cells without an OCV table — qualitative only, NOT chemistry-accurate.
 * Sole shipping cell: `data/cells/NCM-50Ah-csv/`. Add your own folders
   alongside it.
-* Plug-in models from `batsim/plugins/builtin/` and
+* Plug-in models from `batsim_core/plugins/builtin/` and
   `~/.batsim/plugins/` (override via `BATSIM_PLUGIN_PATH`).
 * BMS package: protection, balancer, EKF SOC, controller, pack.
 
@@ -494,10 +494,10 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
 * `soc-eval --script --algorithm ... --cell --current --t-end [--csv]`.
 
 ### Help
-* HTML manual EN / KO under `resources/help/`.
+* HTML manual EN / KO under `assets/help/`.
 * F1 opens; system language auto-detect, language toggle in-page.
-* Screenshots embedded from `resources/help/img/` (regenerate with
-  `python scripts/make_manual_screens.py`).
+* Screenshots embedded from `assets/help/img/` (regenerate with
+  `python tools/make_manual_screens.py`).
 
 ---
 
@@ -538,7 +538,7 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
   is validated against all blockers; if the user-supplied bend
   collides, the auto search takes over.
 * When you change the router or wire item, regenerate manual
-  screenshots: `python scripts/make_manual_screens.py`
+  screenshots: `python tools/make_manual_screens.py`
   (uses `QT_QPA_PLATFORM=offscreen`, no display required).
 
 ### 5.4 Plan & checkpoint hygiene
@@ -586,7 +586,7 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
 | Model not visible in inspector          | `plugins.registry.make_battery`,       |
 |                                          | `plugins.loader` discovery paths       |
 | Manual missing image                    | regenerate via                         |
-|                                          | `scripts/make_manual_screens.py`       |
+|                                          | `tools/make_manual_screens.py`       |
 
 ---
 
@@ -604,3 +604,5 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
 
 *Last updated together with the current manual revision. Bump this
 file whenever architecture or invariants change.*
+
+

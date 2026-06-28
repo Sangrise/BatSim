@@ -1,10 +1,10 @@
 import numpy as np
-from batsim.soc import (SOC_ALGORITHMS, load_from_path, make_soc,
+from batsim_core.soc import (SOC_ALGORITHMS, load_from_path, make_soc,
                         register_soc_algorithm, list_soc_algorithms)
-from batsim.sim import battery_profile_run
+from batsim_core.sim import battery_profile_run
 from pathlib import Path
-import batsim.plugins.builtin  # noqa: F401
-from batsim.plugins import discover
+import batsim_core.plugins.builtin  # noqa: F401
+from batsim_core.plugins import discover
 
 discover()
 
@@ -46,3 +46,4 @@ def test_function_style_algorithm_works():
     soc = algo.step(I=1.0, V=4.0, dt=3600.0)
     # 1 A * 1 h / 2.5 Ah = 0.4 SOC reduction -> 0.6
     assert 0.55 < soc < 0.65
+

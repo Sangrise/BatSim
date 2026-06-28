@@ -6,7 +6,7 @@ import pytest
 
 
 def test_manual_html_files_exist():
-    base = Path(__file__).parents[1] / "resources" / "help"
+    base = Path(__file__).parents[1] / "assets" / "help"
     ko = base / "manual_ko.html"
     en = base / "manual_en.html"
     assert ko.exists() and en.exists()
@@ -27,7 +27,7 @@ def test_detect_system_language_returns_known_value():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
-    from batsim.ui.help_dialog import detect_system_language
+    from batsim_core.ui.help_dialog import detect_system_language
     lang = detect_system_language()
     assert lang in ("ko", "en")
 
@@ -36,7 +36,7 @@ def test_help_dialog_loads_default_locale():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
-    from batsim.ui.help_dialog import HelpDialog
+    from batsim_core.ui.help_dialog import HelpDialog
     dlg = HelpDialog()
     assert len(dlg.browser.toPlainText()) > 100
     dlg.close()
@@ -46,7 +46,7 @@ def test_help_dialog_can_switch_language():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
-    from batsim.ui.help_dialog import HelpDialog
+    from batsim_core.ui.help_dialog import HelpDialog
     dlg = HelpDialog(lang="en")
     assert "BatSim Manual" in dlg.windowTitle()
     text_en = dlg.browser.toPlainText()
@@ -62,12 +62,14 @@ def test_main_window_has_f1_help():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv)
-    import batsim.plugins.builtin  # noqa: F401
-    from batsim.plugins import discover
+    import batsim_core.plugins.builtin  # noqa: F401
+    from batsim_core.plugins import discover
     discover()
-    from batsim.ui.main_window import MainWindow
+    from batsim_core.ui.main_window import MainWindow
     win = MainWindow()
     win.show_help()
     assert win._help_dialog is not None
     win._help_dialog.close()
     win.close()
+
+

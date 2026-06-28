@@ -1,6 +1,6 @@
-from batsim.models.rint import RintModel
-from batsim.models.thevenin import TheveninModel
-from batsim.models.n_rc import NRCModel
+from batsim_core.models.rint import RintModel
+from batsim_core.models.thevenin import TheveninModel
+from batsim_core.models.n_rc import NRCModel
 
 
 def test_rint_voltage_drop():
@@ -27,3 +27,4 @@ def test_coulomb_counting():
     for _ in range(3600):
         m.update(I=1.0, dt=1.0, t=0.0)
     assert abs(m.soc) < 1e-6
+

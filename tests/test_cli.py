@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from batsim.cli import build_parser, main as cli_main
-import batsim.plugins.builtin  # noqa: F401
-import batsim.soc as _soc  # noqa: F401  (registers built-in SOC)
-from batsim.plugins import discover
+from batsim_core.cli import build_parser, main as cli_main
+import batsim_core.plugins.builtin  # noqa: F401
+import batsim_core.soc as _soc  # noqa: F401  (registers built-in SOC)
+from batsim_core.plugins import discover
 
 discover()
 
@@ -47,6 +47,14 @@ def test_cli_list_soc(capsys):
     assert "OCVLookup" in out
 
 
+def test_cli_catalog_basic_json(capsys):
+    rc, out = run_cli(["catalog", "--level", "basic", "--json"], capsys)
+    assert rc == 0
+    assert '"level": "basic"' in out
+    assert '"PCS"' in out
+    assert '"JUNCTION"' not in out
+
+
 def test_cli_cell_test(capsys, tmpdir_safe):
     csvp = tmpdir_safe / "out.csv"
     rc, out = run_cli(["cell-test", "--cell", "NCM-50Ah-csv",
@@ -58,10 +66,35 @@ def test_cli_cell_test(capsys, tmpdir_safe):
 
 
 def test_cli_run_dc(capsys):
-    proj = Path(__file__).parents[1] / "resources" / "examples" / "battery_discharge.batsim"
+    proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
     rc, out = run_cli(["run", str(proj), "--dc"], capsys)
     assert rc == 0
     assert "V(" in out
+
+
+def test_cli_run_json(capsys):
+    proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
+    rc, out = run_cli(["run", str(proj), "--t-end", "0.01", "--dt", "0.01",
+                       "--json"], capsys)
+    assert rc == 0
+    assert '"kind": "transient"' in out
+    assert '"final_voltages"' in out
+
+
+def test_cli_inspect_json(capsys):
+    proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
+    rc, out = run_cli(["inspect", str(proj), "--json"], capsys)
+    assert rc == 0
+    assert '"components"' in out
+    assert '"BATTERY"' in out
+
+
+def test_cli_validate_dc_json(capsys):
+    proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
+    rc, out = run_cli(["validate", str(proj), "--dc", "--json"], capsys)
+    assert rc == 0
+    assert '"ok": true' in out
+    assert '"dc_voltages"' in out
 
 
 def test_cli_sweep(capsys, tmpdir_safe):
@@ -91,3 +124,38 @@ def test_cli_soc_eval_with_external_script(capsys):
     assert "RMSE" in out
     assert "SimpleEKF" in out
     assert "SmoothedCC" in out
+
+
+def test_cli_route_check(capsys):
+    rc, out = run_cli(["route-check"], capsys)
+    assert rc == 0
+    assert "route-check passed" in out
+
+
+def test_cli_blocks_roundtrip(capsys, tmpdir_safe, monkeypatch):
+    import batsim_core.io.blocks as blocks
+    monkeypatch.setattr(blocks, "BLOCKS_DIR", tmpdir_safe / "blocks")
+    block_src = tmpdir_safe / "module.json"
+    block_src.write_text("""{
+      "components": [
+        {"id": "R1", "kind": "R", "params": {"R": 5.0},
+         "pins": [null, null], "pos": [0, 0], "rotation": 0,
+         "tap_pin": null}
+      ],
+      "wires": []
+    }""", encoding="utf-8")
+    rc, out = run_cli(["blocks", "import", str(block_src), "--name", "Load"], capsys)
+    assert rc == 0
+    assert "imported" in out
+    rc, out = run_cli(["blocks", "list", "--json"], capsys)
+    assert rc == 0
+    assert '"Load"' in out
+    rc, out = run_cli(["blocks", "show", "Load"], capsys)
+    assert rc == 0
+    assert '"R"' in out
+    exported = tmpdir_safe / "exported.json"
+    rc, out = run_cli(["blocks", "export", "Load", str(exported)], capsys)
+    assert rc == 0
+    assert exported.exists()
+
+

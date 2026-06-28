@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 import numpy as np
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
 
 
 def _comp(cid, kind, params, pins=2):
@@ -113,3 +113,4 @@ def test_pcs_legacy_modes_still_work():
                               R0=0.005, Rline=0.05)
     n_dc_pos = next(e.nodes[2] for e in nl.elements if e.name == "PCS1")
     assert abs(res["V"][n_dc_pos][-1] - 3.5) < 0.05
+

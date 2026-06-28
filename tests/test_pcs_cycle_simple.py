@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
 
 
 def _comp(cid, kind, params, pins=2):
@@ -49,3 +49,4 @@ def test_cycle_simple_runs_charge_rest_discharge_rest():
     assert I.min() < -10.0, f"expected charge current < -10A, got {I.min()}"
     # Discharge phase: positive
     assert I.max() > 5.0, f"expected discharge > 5A, got {I.max()}"
+

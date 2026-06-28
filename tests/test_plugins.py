@@ -2,11 +2,11 @@ import json
 import tempfile
 from pathlib import Path
 
-import batsim.plugins.builtin  # registers built-ins
-from batsim.plugins import discover, list_battery_models, make_battery
-from batsim.plugins.registry import (BATTERY_MODELS, CELL_LIBRARY,
+import batsim_core.plugins.builtin  # registers built-ins
+from batsim_core.plugins import discover, list_battery_models, make_battery
+from batsim_core.plugins.registry import (BATTERY_MODELS, CELL_LIBRARY,
                                      register_battery_model)
-from batsim.models.base import BatteryModel
+from batsim_core.models.base import BatteryModel
 
 
 def test_builtin_models_registered():
@@ -86,3 +86,5 @@ def test_csv_folder_cell_user_dir(monkeypatch):
     assert "TmpCsvCell" in CELL_LIBRARY
     bat = make_battery(cell="TmpCsvCell")
     assert abs(bat.terminal_voltage(0, None) - 3.6) < 1e-9
+
+

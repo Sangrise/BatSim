@@ -6,8 +6,8 @@ pytest.importorskip("PyQt6")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from batsim.ui.canvas.scene import SchematicScene
-from batsim.ui.canvas.wire_item import WireItem
+from batsim_core.ui.canvas.scene import SchematicScene
+from batsim_core.ui.canvas.wire_item import WireItem
 
 
 @pytest.fixture(scope="module")
@@ -42,9 +42,39 @@ def test_wire_avoids_component(app):
     # The path must not cross the blocker's bounding box
     br = blocker.sceneBoundingRect()
     pts = [w._path.elementAt(i) for i in range(w._path.elementCount())]
-    from batsim.ui.canvas.wire_routing import _seg_in_rect
+    from batsim_core.ui.canvas.wire_routing import _seg_in_rect
     for p1, p2 in zip(pts, pts[1:]):
         assert not _seg_in_rect(QPointF(p1.x, p1.y), QPointF(p2.x, p2.y), br)
+
+
+def test_wire_dogleg_avoids_near_endpoint_component(app):
+    sc = SchematicScene()
+    a = sc.add_component("BATTERY", QPointF(-180, -40))
+    b = sc.add_component("C", QPointF(180, 120))
+    blocker = sc.add_component("BATPACK", QPointF(-100, 20))
+    w = WireItem(a, 1, b, 0)
+    sc.addItem(w); sc._wires.append(w)
+    w.refresh()
+    from batsim_core.ui.canvas.wire_routing import _seg_in_rect
+    pts = [QPointF(w._path.elementAt(i).x, w._path.elementAt(i).y)
+           for i in range(w._path.elementCount())]
+    br = blocker.sceneBoundingRect()
+    assert not any(_seg_in_rect(p1, p2, br) for p1, p2 in zip(pts, pts[1:]))
+
+
+def test_wire_grid_route_avoids_destination_side_component(app):
+    sc = SchematicScene()
+    a = sc.add_component("BATPACK", QPointF(-200, -140))
+    b = sc.add_component("BUS", QPointF(60, 80))
+    blocker = sc.add_component("BATTERY", QPointF(120, -40))
+    w = WireItem(a, 1, b, 1)
+    sc.addItem(w); sc._wires.append(w)
+    w.refresh()
+    from batsim_core.ui.canvas.wire_routing import _seg_in_rect
+    pts = [QPointF(w._path.elementAt(i).x, w._path.elementAt(i).y)
+           for i in range(w._path.elementCount())]
+    br = blocker.sceneBoundingRect()
+    assert not any(_seg_in_rect(p1, p2, br) for p1, p2 in zip(pts, pts[1:]))
 
 
 def test_t_junction_split(app):
@@ -68,7 +98,7 @@ def test_t_junction_split(app):
     assert any(x.b_comp is junction or x.a_comp is junction for x in sc._wires)
     # Netlist must still see r3 connected to r1/r2's shared node via the
     # synthetic tap wire emitted from to_graph().
-    from batsim.engine.netlist import from_graph
+    from batsim_core.engine.netlist import from_graph
     nl = from_graph(sc.to_graph())
     r1_node = next(e for e in nl.elements if e.name == r1.cid).nodes[1]
     r3_node = next(e for e in nl.elements if e.name == r3.cid).nodes[0]
@@ -103,7 +133,7 @@ def test_mirror_keeps_pin_attached(app):
 
 
 def test_junction_does_not_appear_in_netlist(app):
-    from batsim.engine.netlist import from_graph
+    from batsim_core.engine.netlist import from_graph
     g = {
         "components": [
             {"id": "J1", "kind": "JUNCTION", "params": {}, "pins": [None]},
@@ -116,7 +146,7 @@ def test_junction_does_not_appear_in_netlist(app):
 
 
 def test_crossings_overlay_classifies_dot_vs_hop(app):
-    from batsim.ui.canvas.crossings import _node_groups, _seg_cross
+    from batsim_core.ui.canvas.crossings import _node_groups, _seg_cross
     from PyQt6.QtCore import QPointF
     sc = SchematicScene()
     # Two unrelated wires that cross perpendicularly → should be a HOP
@@ -133,3 +163,4 @@ def test_crossings_overlay_classifies_dot_vs_hop(app):
     # Now wire them together via JUNCTION tap → grouping merges
     grp_before = _node_groups(sc)
     assert grp_before[id(w_h)] != grp_before[id(w_v)]
+

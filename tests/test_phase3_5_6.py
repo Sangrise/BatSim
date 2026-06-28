@@ -1,7 +1,7 @@
 import math
 import numpy as np
-from batsim.engine.netlist import Netlist, Element
-from batsim.engine.nonlinear import solve_dc, solve_transient
+from batsim_core.engine.netlist import Netlist, Element
+from batsim_core.engine.nonlinear import solve_dc, solve_transient
 
 
 def test_diode_forward_bias_dc():
@@ -41,7 +41,7 @@ def test_mosfet_saturation():
 
 
 def test_spm_discharges_voltage():
-    from batsim.models.spm import SPMModel
+    from batsim_core.models.spm import SPMModel
     m = SPMModel(capacity_Ah=2.5, soc0=1.0, R0=0.02)
     v0 = m.terminal_voltage(0, None)
     for _ in range(3600):
@@ -52,8 +52,8 @@ def test_spm_discharges_voltage():
 
 
 def test_ekf_converges():
-    from batsim.bms.ekf_soc import EKFSocEstimator
-    from batsim.models.thevenin import TheveninModel
+    from batsim_core.bms.ekf_soc import EKFSocEstimator
+    from batsim_core.models.thevenin import TheveninModel
     truth = TheveninModel(capacity_Ah=2.5, soc0=0.7, R0=0.03, R1=0.02, C1=2000.0)
     ekf = EKFSocEstimator(capacity_Ah=2.5, soc0=1.0, R0=0.03, R1=0.02, C1=2000.0)
     dt = 1.0
@@ -66,9 +66,10 @@ def test_ekf_converges():
 
 
 def test_cccv_controller():
-    from batsim.bms.controller import CCCVController
+    from batsim_core.bms.controller import CCCVController
     c = CCCVController(I_charge=1.0, V_cv=4.20, mode="charge")
     assert c.command(V_t=3.5) == -1.0  # CC region
     assert abs(c.command(V_t=4.20)) < 1e-9 or c.command(V_t=4.20) == 0.0  # at CV target
     c.mode = "discharge"
     assert c.command(V_t=3.7) == 1.0
+

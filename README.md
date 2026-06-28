@@ -17,10 +17,11 @@ pip install -e .            # exposes the `batsim` console script
 ```powershell
 batsim ui
 # or:
-python -m batsim ui
+python -m batsim_core ui
 ```
 
-Drag components from the left palette → click pin then pin to wire → `Ctrl+R` to simulate.
+Drag components from the searchable left palette → click pin then pin to wire → `Ctrl+R` to simulate.
+The palette has **Basic / Advanced / All** tabs; Basic is sized for electrical-engineering coursework and includes circuit, semiconductor, measurement, battery, grid, transformer, and PCS parts.
 
 ## CLI — everything is scriptable
 
@@ -28,13 +29,22 @@ Drag components from the left palette → click pin then pin to wire → `Ctrl+R
 batsim list-models                # registered battery models
 batsim list-cells                 # data files in data/cells/
 batsim list-soc                   # SOC algorithms
+batsim catalog --level basic --json
+batsim route-check                # schematic wire-overlap smoke check
+batsim inspect myproj.batsim --json
+batsim validate myproj.batsim --dc --json
 
 batsim run myproj.batsim --t-end 60 --dt 0.01 --csv out.csv
 batsim run myproj.batsim --dc
+batsim run myproj.batsim --t-end 60 --dt 0.01 --json
 
 batsim cell-test --cell INR18650-25R --r-load 1.0 --t-end 3600 --csv discharge.csv
 
 batsim sweep examples/sweep_example.json --csv sweep.csv
+
+batsim blocks list --json
+batsim blocks import my_pack_block.json --name "My pack"
+batsim blocks export "My pack" out/my_pack_block.json
 
 batsim soc-eval --script examples/external_soc_example.py \
                 --algorithm CoulombCounter SimpleEKF SmoothedCC OCVLookup \
@@ -54,7 +64,7 @@ See `docs/EXTENDING.md` and `examples/`.
 ## Architecture
 
 ```
-batsim/
+batsim_core/
   ui/        PyQt6 schematic editor (canvas, palette, inspector, waveforms)
   components/ R/L/C/V/I/SWITCH/DIODE/MOSFET/BATTERY/GND symbols
   engine/    MNA + Newton-Raphson MNA (DC + Backward-Euler transient)
@@ -77,3 +87,5 @@ examples/
 ```
 
 Roadmap: `plan.md`.
+
+

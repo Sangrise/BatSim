@@ -1,10 +1,10 @@
 """BATRACK (series of BATPACKs) + BMS (control-domain) component tests."""
 from __future__ import annotations
 
-from batsim.engine.netlist import from_graph
-from batsim.engine.nonlinear import solve_transient
-from batsim.bms.cell_balancer import PassiveBalancerV1
-from batsim.plugins import discover
+from batsim_core.engine.netlist import from_graph
+from batsim_core.engine.nonlinear import solve_transient
+from batsim_core.bms.cell_balancer import PassiveBalancerV1
+from batsim_core.plugins import discover
 
 discover()
 
@@ -246,8 +246,8 @@ def test_rack_exposes_per_pack_voltage_and_per_cell_v_t_and_rack_current():
 
 
 def test_rack_set_thermal_model_propagates_to_every_pack_and_cell():
-    from batsim.models.rack import BatteryRackModel
-    from batsim.models.pack import BatteryPackModel
+    from batsim_core.models.rack import BatteryRackModel
+    from batsim_core.models.pack import BatteryPackModel
 
     rack = BatteryRackModel(
         n_packs_series=2,
@@ -264,3 +264,4 @@ def test_rack_set_thermal_model_propagates_to_every_pack_and_cell():
     assert all(c.thermal_model is not None for c in flat)
     rack.update(I=1.0, dt=1.0, t=0.0)
     assert all(c.T_cell == 42.0 for c in flat)
+
