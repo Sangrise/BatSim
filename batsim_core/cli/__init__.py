@@ -197,6 +197,157 @@ def cmd_validate(args):
     return 0 if result["ok"] else 1
 
 
+def _step_duration_estimate(s: dict, cap_Ah, n_series: int = 1) -> float:
+    """Estimate one CYCLE step's actual runtime (seconds)."""
+    sm = str(s.get("mode", "REST")).upper()
+    max_time = None
+    try:
+        if "max_time" in s:
+            max_time = float(s["max_time"])
+        elif "time" in s:
+            max_time = float(s["time"])
+    except Exception:
+        max_time = None
+
+    def _eff(key, key_cell):
+        if key_cell in s:
+            try:
+                return float(s[key_cell]) * max(int(n_series), 1)
+            except Exception:
+                return None
+        if key in s:
+            try:
+                return float(s[key])
+            except Exception:
+                return None
+        return None
+
+    V_max = _eff("V_max", "V_max_cell")
+    V_min = _eff("V_min", "V_min_cell")
+    if V_max and V_min:
+        V_nom = 0.5 * (V_max + V_min)
+    elif V_max:
+        V_nom = V_max
+    elif V_min:
+        V_nom = V_min
+    else:
+        V_nom = 4.0 * max(int(n_series), 1)
+
+    est = None
+    if sm == "REST":
+        try:
+            est = float(s.get("time", s.get("max_time", 0)) or 0)
+        except Exception:
+            est = 0.0
+    elif sm == "CC":
+        try:
+            I = abs(float(s.get("I", 0.0)))
+        except Exception:
+            I = 0.0
+        if cap_Ah and I > 0:
+            est = 3600.0 * cap_Ah / I
+    elif sm == "CP":
+        try:
+            P = abs(float(s.get("P", 0.0)))
+        except Exception:
+            P = 0.0
+        if cap_Ah and P > 0 and V_nom > 0:
+            est = 3600.0 * cap_Ah * V_nom / P
+    elif sm in ("CV", "CCCV", "CPCV"):
+        est = max_time if max_time is not None else 3600.0
+
+    if est is None:
+        return max_time if max_time is not None else 0.0
+    if max_time is not None:
+        return min(est, max_time)
+    return est
+
+
+def _auto_t_end(graph: dict) -> tuple[float, str]:
+    """Return (t_end, reason) inferred from PCS cycles in the graph.
+
+    Falls back to 60 s when no PCS cycle is found.
+    """
+    comps = graph.get("components", [])
+    cap_Ah = None
+    for c in comps:
+        if c.get("kind") in ("BATTERY", "BATPACK", "BATRACK"):
+            try:
+                cap = float(c.get("params", {}).get("capacity_Ah", 0.0))
+                if c.get("kind") in ("BATPACK", "BATRACK"):
+                    cap *= int(c.get("params", {}).get("n_parallel", 1) or 1)
+                if cap > 0:
+                    cap_Ah = cap
+                    break
+            except Exception:
+                pass
+
+    best = 0.0
+    found = False
+    for c in comps:
+        if c.get("kind") != "PCS":
+            continue
+        params = c.get("params", {})
+        mode = params.get("mode", "")
+        n_series = int(params.get("n_series", 1) or 1)
+        if mode == "CYCLE_SIMPLE":
+            try:
+                I_chg = abs(float(params.get("cyc_I_chg", 0.0)))
+                I_dis = abs(float(params.get("cyc_I_dis", 0.0)))
+                t_rest = float(params.get("cyc_t_rest", 0.0))
+                cycles = int(params.get("cyc_count", 1) or 1)
+            except Exception:
+                continue
+            t_chg = (3600.0 * cap_Ah / I_chg) if (cap_Ah and I_chg > 0) else 3600.0
+            t_dis = (3600.0 * cap_Ah / I_dis) if (cap_Ah and I_dis > 0) else 3600.0
+            total = (t_chg + t_dis + 2 * t_rest) * max(cycles, 1)
+            if total > 0:
+                found = True
+                best = max(best, total)
+        elif mode == "CYCLE":
+            raw = params.get("cycle_steps", "[]")
+            try:
+                steps = raw if isinstance(raw, list) else json.loads(raw)
+            except Exception:
+                continue
+            repeat = int(params.get("cycle_repeat", 1) or 1)
+            if repeat <= 0:
+                continue
+            per_cycle = sum(
+                _step_duration_estimate(s, cap_Ah, n_series)
+                for s in steps if isinstance(s, dict)
+            )
+            total = per_cycle * repeat
+            if total > 0:
+                found = True
+                best = max(best, total)
+
+    if found and best > 0:
+        return best, f"auto from PCS cycle ({best:g} s)"
+    return 60.0, "default (no PCS cycle found)"
+
+
+def _auto_dt(graph: dict) -> tuple[float, str]:
+    """Return (dt, reason) inferred from GRID frequency; fallback 1 s."""
+    for c in graph.get("components", []):
+        if c.get("kind") == "GRID":
+            try:
+                freq = float(c.get("params", {}).get("freq", 0.0))
+                if freq > 0:
+                    dt = 1.0 / (20.0 * freq)
+                    return dt, f"auto from GRID freq={freq} Hz (1/20f = {dt:g} s)"
+            except Exception:
+                pass
+    # Battery / slow DC circuits: 1 s is a sensible default
+    has_battery = any(
+        c.get("kind") in ("BATTERY", "BATPACK", "BATRACK")
+        for c in graph.get("components", [])
+    )
+    if has_battery:
+        return 1.0, "default for battery circuit (1 s)"
+    return 1e-3, "default (1 ms)"
+
+
 def cmd_run(args):
     from batsim_core.engine.netlist import from_graph, probe_map
     from batsim_core.engine.nonlinear import solve_dc, solve_transient
@@ -214,7 +365,18 @@ def cmd_run(args):
             print(f"V({n}) = {val:.6f}")
         return 0
 
-    res = solve_transient(nl, t_end=args.t_end, dt=args.dt)
+    t_end = args.t_end
+    dt = args.dt
+    if t_end is None:
+        t_end, t_reason = _auto_t_end(graph)
+        if not args.json:
+            print(f"t_end: {t_reason}")
+    if dt is None:
+        dt, dt_reason = _auto_dt(graph)
+        if not args.json:
+            print(f"dt: {dt_reason}")
+
+    res = solve_transient(nl, t_end=t_end, dt=dt)
     aliases = probe_map(graph)
     if args.csv:
         _write_transient_csv(res, args.csv, aliases=aliases)
@@ -575,8 +737,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     pr = sub.add_parser("run", help="Run a .batsim project headlessly")
     pr.add_argument("project")
-    pr.add_argument("--t-end", type=float, default=1.0)
-    pr.add_argument("--dt", type=float, default=1e-3)
+    pr.add_argument("--t-end", type=float, default=None,
+                    help="Simulation end time [s] (auto-detected from PCS cycle if omitted)")
+    pr.add_argument("--dt", type=float, default=None,
+                    help="Time step [s] (auto-detected from GRID frequency if omitted)")
     pr.add_argument("--dc", action="store_true", help="DC operating point only")
     pr.add_argument("--csv", help="Write transient series to this CSV")
     pr.add_argument("--json", action="store_true",
