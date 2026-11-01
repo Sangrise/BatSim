@@ -49,7 +49,7 @@ class _PlotPanel(QFrame):
         side.addWidget(self.title)
 
         hint = QLabel("클릭: Off → L → R")
-        hint.setStyleSheet("color:#888; font-size:10px;")
+        hint.setStyleSheet("color:#aeb8bf; font-size:10px;")
         side.addWidget(hint)
 
         self.list = QListWidget()
@@ -230,7 +230,7 @@ class WaveformView(QWidget):
         bar.addWidget(self._stop_btn)
         bar.addStretch(1)
         self._info = QLabel("No data — run a simulation (Ctrl+R)")
-        self._info.setStyleSheet("color:#888;")
+        self._info.setStyleSheet("color:#aeb8bf;")
         bar.addWidget(self._info)
         layout.addLayout(bar)
 

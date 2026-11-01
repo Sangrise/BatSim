@@ -144,9 +144,11 @@
       바뀝니다.</li>
   <li><code>V</code>를 클릭 → 인스펙터에서 <code>V</code> 값을
       <code>5</code>로 변경 후 <kbd>Enter</kbd>.</li>
-  <li><kbd>Ctrl</kbd>+<kbd>R</kbd>로 시뮬레이션 다이얼로그를 열고,
-      <i>Transient</i>, <code>t_end = 0.05</code>,
-      <code>dt = 0.0005</code>로 실행.</li>
+  <li><kbd>Ctrl</kbd>+<kbd>R</kbd>로 시뮬레이션 다이얼로그를 열고
+      <i>Transient</i>를 선택합니다. 이 작은 RC 예제는
+      <code>End time = 0.05</code>, <code>Time step = 0.0005</code>를
+      넣고 실행합니다. 배터리/PCS 프로젝트는 보통 두 필드를
+      <i>Auto</i>로 비워둬도 됩니다.</li>
   <li>하단 Waveforms 도크에 V(N1), V(N2), I(V1) 파형이 표시됩니다.</li>
 </ol>
 <figure>
@@ -512,14 +514,19 @@ PCONST/ICONST/IPATTERN/I 또는 BATTERY의 음극이 자동 접지로
           소스는 DC 값으로 고정.</td>
       <td>노드 전압 스냅샷 (메시지 박스).</td></tr>
   <tr><td><b>Transient</b></td>
-      <td>0→<code>t_end</code> 시간영역 적분, 스텝 <code>dt</code>.
-          비선형 소자/배터리는 Newton 반복.</td>
+      <td>일반적인 시간영역 실행. 파형을 만들고 캐패시터, 인덕터,
+          AC 소스, 배터리 SOC, PCS cycle, BMS 로직 같은 동적 상태를
+          업데이트합니다.</td>
       <td>전체 파형이 Waveforms 도크로 표시.</td></tr>
 </table>
-<p><b>Auto from PCS cycle</b> 버튼 — Transient에서 <code>t_end</code>
-필드 옆 버튼을 누르면 시트 위 모든 PCS의 <code>cycle_steps</code>의
-<code>max_time</code>·<code>time</code>을 합산하고 <code>cycle_repeat</code>를
-곱한 값(여러 PCS가 있으면 최댓값)을 자동 입력합니다.</p>
+<p>Transient의 <b>End time</b>과 <b>Time step</b>은 선택 입력입니다.
+비워두면 Auto로 처리됩니다. End time은 PCS cycle이 있으면 그 길이로
+추정하고, 없으면 60 s를 씁니다. Time step은 GRID 주파수가 있으면
+한 주기당 20점 기준으로 잡고, 배터리 회로는 1 s, 일반 회로는 1 ms를
+기본값으로 씁니다.</p>
+<p><b>Auto from PCS cycle</b> 버튼 — <b>End time</b> 필드 옆 버튼을
+누르면 시트 위 모든 PCS의 cycle 정의에서 실행 시간을 추정해 자동
+입력합니다. 여러 PCS가 있으면 최댓값을 사용합니다.</p>
 <div class="note"><b>PCS cycle ≠ Run t_end</b> — cycle은 “무엇을 할지”를,
 t_end는 “얼마 동안 시뮬할지”를 정합니다. 두 값은 독립적이며,
 <code>t_end &lt; cycle 총 시간</code>이면 시뮬이 도중에 끊기고,
@@ -666,7 +673,7 @@ class MyEKF:
         <code>step(self, I, V, dt)</code>여야 합니다.</td></tr>
 </table>
 
-<p style="margin-top:30px; color:#888;">— BatSim · 함께 보세요:
+<p style="margin-top:30px; color:#aeb8bf;">— BatSim · 함께 보세요:
 <code>plan.md</code>, <code>docs/EXTENDING.md</code>, 기여자용
 <code>AGENTS.md</code>.</p>
 

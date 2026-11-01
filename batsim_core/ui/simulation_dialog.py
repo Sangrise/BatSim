@@ -148,6 +148,39 @@ def _estimate_pcs_total_time(netlist) -> float | None:
     return best if found else None
 
 
+def _estimate_dt(netlist) -> tuple[float, str]:
+    """Estimate a reasonable transient timestep from the schematic."""
+    comps = list(getattr(netlist, "components", []) or [])
+    for c in comps:
+        if c.get("kind") != "GRID":
+            continue
+        try:
+            freq = float(c.get("params", {}).get("freq", 0.0))
+        except Exception:
+            continue
+        if freq > 0:
+            dt = 1.0 / (20.0 * freq)
+            return dt, f"GRID {freq:g} Hz 기준 20 samples/cycle"
+
+    has_battery = any(
+        c.get("kind") in ("BATTERY", "BATPACK", "BATRACK")
+        for c in comps
+    )
+    if has_battery:
+        return 1.0, "battery/slow DC 기본값"
+    return 1e-3, "일반 회로 기본값"
+
+
+def _parse_optional_positive_float(text: str, label: str) -> float | None:
+    text = text.strip()
+    if not text:
+        return None
+    value = float(text)
+    if value <= 0:
+        raise ValueError(f"{label} must be greater than 0.")
+    return value
+
+
 class SimulationDialog(QDialog):
     def __init__(self, parent=None, netlist=None):
         super().__init__(parent)
@@ -160,10 +193,12 @@ class SimulationDialog(QDialog):
 
         self._kind_help = QLabel()
         self._kind_help.setWordWrap(True)
-        self._kind_help.setStyleSheet("color: #555; font-size: 11px;")
+        self._kind_help.setStyleSheet("color: #aeb8bf; font-size: 11px;")
 
-        self.t_end = QLineEdit("1.0")
-        self.dt = QLineEdit("0.001")
+        self.t_end = QLineEdit("")
+        self.t_end.setPlaceholderText("Auto")
+        self.dt = QLineEdit("")
+        self.dt.setPlaceholderText("Auto")
 
         # "Use PCS cycle length" helper button
         t_end_row = QWidget()
@@ -172,7 +207,7 @@ class SimulationDialog(QDialog):
         h.addWidget(self.t_end, 1)
         self._cycle_btn = QPushButton("Auto from PCS cycle")
         self._cycle_btn.setToolTip(
-            "Compute t_end from PCS cycle steps (sum × cycle_repeat).\n"
+            "Compute t_end from PCS cycle steps.\n"
             "PCS cycles describe WHAT to do; t_end limits HOW LONG\n"
             "to simulate. They are independent — if t_end < cycle\n"
             "duration, the simulation stops early; if larger, the PCS\n"
@@ -182,8 +217,8 @@ class SimulationDialog(QDialog):
 
         layout.addRow("Type", self.kind)
         layout.addRow("", self._kind_help)
-        layout.addRow("t_end (s)", t_end_row)
-        layout.addRow("dt (s)", self.dt)
+        layout.addRow("End time (s)", t_end_row)
+        layout.addRow("Time step (s)", self.dt)
         bb = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -195,20 +230,18 @@ class SimulationDialog(QDialog):
     def _on_kind_changed(self, text: str):
         if text == "Transient":
             self._kind_help.setText(
-                "<b>Transient</b> — time-domain simulation from 0→t_end with "
-                "step dt. Required for any dynamic behaviour: capacitor/"
-                "inductor charging, AC sources, battery SOC, PCS profiles, "
-                "BMS state machines.")
+                "<b>Transient</b> — normal time-domain run. Produces "
+                "waveforms and updates dynamic state such as capacitors, "
+                "inductors, AC sources, battery SOC, PCS cycles, and BMS "
+                "logic. Leave End time/Time step blank for Auto.")
             self.t_end.setEnabled(True)
             self.dt.setEnabled(True)
             self._cycle_btn.setEnabled(True)
         else:
             self._kind_help.setText(
-                "<b>DC operating point</b> — solves the steady-state bias "
-                "point only (t = 0; capacitors open, inductors shorted, AC "
-                "sources at their DC value). Returns one snapshot, no "
-                "waveforms. Useful as a sanity check before running a "
-                "transient.")
+                "<b>DC operating point</b> — one static t=0 sanity check. "
+                "Capacitors are open, inductors are shorted, and AC sources "
+                "use their DC value. It returns voltages only, no waveforms.")
             self.t_end.setEnabled(False)
             self.dt.setEnabled(False)
             self._cycle_btn.setEnabled(False)
@@ -219,8 +252,27 @@ class SimulationDialog(QDialog):
             self.t_end.setText(f"{total:g}")
 
     def result_settings(self) -> dict:
+        if self.kind.currentText() == "DC operating point":
+            return {"kind": self.kind.currentText(), "t_end": None, "dt": None}
+
+        t_end = _parse_optional_positive_float(self.t_end.text(), "End time")
+        dt = _parse_optional_positive_float(self.dt.text(), "Time step")
+        t_reason = "manual"
+        dt_reason = "manual"
+        if t_end is None:
+            total = _estimate_pcs_total_time(self._netlist)
+            if total and total > 0:
+                t_end = total
+                t_reason = "auto from PCS cycle"
+            else:
+                t_end = 60.0
+                t_reason = "default"
+        if dt is None:
+            dt, dt_reason = _estimate_dt(self._netlist)
         return {
             "kind": self.kind.currentText(),
-            "t_end": float(self.t_end.text()),
-            "dt": float(self.dt.text()),
+            "t_end": t_end,
+            "dt": dt,
+            "t_end_reason": t_reason,
+            "dt_reason": dt_reason,
         }

@@ -53,7 +53,7 @@ class HelpDialog(QDialog):
 
         bar = QHBoxLayout()
         self._path_label = QLabel("")
-        self._path_label.setStyleSheet("color:#888; font-size:11px;")
+        self._path_label.setStyleSheet("color:#aeb8bf; font-size:11px;")
         bar.addWidget(self._path_label, 1)
 
         self._btn_ko = QPushButton("한국어")

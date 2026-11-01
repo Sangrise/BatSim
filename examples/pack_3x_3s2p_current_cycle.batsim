@@ -1,0 +1,129 @@
+{
+  "components": [
+    {
+      "id": "BP1",
+      "kind": "BATPACK",
+      "params": {
+        "model": "DataDriven",
+        "cell": "NCM-50Ah-csv",
+        "n_series": 3,
+        "n_parallel": 2,
+        "soc0": 1.0,
+        "soc_init_spread": 0.0,
+        "balancer": "None"
+      },
+      "pins": [null, null],
+      "pos": [-120, -180],
+      "rotation": 90
+    },
+    {
+      "id": "BP2",
+      "kind": "BATPACK",
+      "params": {
+        "model": "DataDriven",
+        "cell": "NCM-50Ah-csv",
+        "n_series": 3,
+        "n_parallel": 2,
+        "soc0": 1.0,
+        "soc_init_spread": 0.0,
+        "balancer": "None"
+      },
+      "pins": [null, null],
+      "pos": [-120, 0],
+      "rotation": 90
+    },
+    {
+      "id": "BP3",
+      "kind": "BATPACK",
+      "params": {
+        "model": "DataDriven",
+        "cell": "NCM-50Ah-csv",
+        "n_series": 3,
+        "n_parallel": 2,
+        "soc0": 1.0,
+        "soc_init_spread": 0.0,
+        "balancer": "None"
+      },
+      "pins": [null, null],
+      "pos": [-120, 180],
+      "rotation": 90
+    },
+    {
+      "id": "I_CYCLE",
+      "kind": "IPATTERN",
+      "params": {
+        "csv": "examples/pack_3x_3s2p_current_cycle.csv",
+        "scale": 1.0,
+        "repeat": false,
+        "I": 0.0
+      },
+      "pins": [null, null],
+      "pos": [180, 0],
+      "rotation": 90
+    },
+    {
+      "id": "IP_STACK",
+      "kind": "IPROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [40, -240],
+      "rotation": 0
+    },
+    {
+      "id": "P_BP1",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [-260, -180],
+      "rotation": 90
+    },
+    {
+      "id": "P_BP2",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [-260, 0],
+      "rotation": 90
+    },
+    {
+      "id": "P_BP3",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [-260, 180],
+      "rotation": 90
+    },
+    {
+      "id": "P_STACK",
+      "kind": "PROBE",
+      "params": {},
+      "pins": [null, null],
+      "pos": [40, 0],
+      "rotation": 90
+    },
+    {
+      "id": "GND1",
+      "kind": "GND",
+      "params": {},
+      "pins": ["0"],
+      "pos": [180, 120],
+      "rotation": 0
+    }
+  ],
+  "wires": [
+    {"a": "BP1.1", "b": "BP2.0"},
+    {"a": "BP2.1", "b": "BP3.0"},
+    {"a": "BP3.1", "b": "I_CYCLE.1"},
+    {"a": "I_CYCLE.0", "b": "IP_STACK.0"},
+    {"a": "IP_STACK.1", "b": "BP1.0"},
+    {"a": "P_BP1.0", "b": "BP1.0"},
+    {"a": "P_BP1.1", "b": "BP1.1"},
+    {"a": "P_BP2.0", "b": "BP2.0"},
+    {"a": "P_BP2.1", "b": "BP2.1"},
+    {"a": "P_BP3.0", "b": "BP3.0"},
+    {"a": "P_BP3.1", "b": "BP3.1"},
+    {"a": "P_STACK.0", "b": "BP1.0"},
+    {"a": "P_STACK.1", "b": "BP3.1"},
+    {"a": "BP3.1", "b": "GND1.0"}
+  ]
+}

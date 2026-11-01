@@ -390,7 +390,11 @@ class MainWindow(QMainWindow):
         dlg = SimulationDialog(self, netlist=bag)
         if dlg.exec() != dlg.DialogCode.Accepted:
             return
-        cfg = dlg.result_settings()
+        try:
+            cfg = dlg.result_settings()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Simulation settings", str(exc))
+            return
         graph = self.scene.to_graph()
         for c in graph["components"]:
             if c["kind"] == "BATTERY":
@@ -437,8 +441,13 @@ class MainWindow(QMainWindow):
             pass
         self.waveform.stopRequested.connect(worker.stop)
 
+        reason = ""
+        if cfg.get("t_end_reason") != "manual" or cfg.get("dt_reason") != "manual":
+            reason = (f" · t_end {cfg.get('t_end_reason')} · "
+                      f"dt {cfg.get('dt_reason')}")
         self.statusBar().showMessage(
-            f"Transient running… t_end={cfg['t_end']} s · dt={cfg['dt']} s")
+            f"Transient running… t_end={cfg['t_end']} s · dt={cfg['dt']} s"
+            f"{reason}")
         thread.start()
 
     @pyqtSlot(object, object, object, float)

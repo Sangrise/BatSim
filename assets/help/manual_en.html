@@ -144,8 +144,10 @@ solver</b>:</p>
   <li>Click the <code>V</code> source — the right-hand <b>Inspector</b>
       shows its <code>V</code> field. Type <code>5</code> and press
       <kbd>Enter</kbd>.</li>
-  <li>Press <kbd>Ctrl</kbd>+<kbd>R</kbd>, choose <i>Transient</i>, set
-      <code>t_end = 0.05</code>, <code>dt = 0.0005</code>, press OK.</li>
+  <li>Press <kbd>Ctrl</kbd>+<kbd>R</kbd>, choose <i>Transient</i>. For this
+      small RC example, enter <code>End time = 0.05</code> and
+      <code>Time step = 0.0005</code>, then press OK. In battery/PCS
+      projects those fields can usually be left on <i>Auto</i>.</li>
   <li>The bottom Waveforms dock opens with V(N1), V(N2), I(V1) curves.</li>
 </ol>
 <figure>
@@ -518,15 +520,19 @@ dialog. Inline help describes the selected mode.</p>
           AC sources held at their DC value.</td>
       <td>Snapshot of node voltages (message box).</td></tr>
   <tr><td><b>Transient</b></td>
-      <td>Time-domain integration 0→<code>t_end</code> with step
-          <code>dt</code>. Newton iteration handles non-linear devices
-          and battery models.</td>
+      <td>Normal time-domain run. Produces waveforms and updates dynamic
+          state such as capacitors, inductors, AC sources, battery SOC,
+          PCS cycles, and BMS logic.</td>
       <td>Full waveforms in the Waveforms dock.</td></tr>
 </table>
-<p><b>Auto from PCS cycle</b> button — next to <code>t_end</code>. Sums
-each PCS's <code>cycle_steps</code> (<code>max_time</code>·<code>time</code>)
-× <code>cycle_repeat</code> and uses the largest across all PCS
-components.</p>
+<p><b>End time</b> and <b>Time step</b> are optional in Transient mode.
+Leave them blank for Auto: end time is estimated from PCS cycles when
+available, otherwise defaults to 60 s; time step uses GRID frequency
+when present (20 samples/cycle), otherwise battery circuits default to
+1 s and generic circuits to 1 ms.</p>
+<p><b>Auto from PCS cycle</b> button — next to <b>End time</b>. Fills the
+field from each PCS's cycle definition and uses the largest estimate
+across all PCS components.</p>
 <div class="note"><b>PCS cycle ≠ Run t_end.</b> The cycle defines
 <i>what</i> to do; <code>t_end</code> defines <i>how long</i> to
 simulate. They are independent: if <code>t_end</code> is shorter the
@@ -677,7 +683,7 @@ exactly <code>step(self, I, V, dt)</code> is auto-registered.</p>
         parameters).</td></tr>
 </table>
 
-<p style="margin-top:30px; color:#888;">— BatSim · See also:
+<p style="margin-top:30px; color:#aeb8bf;">— BatSim · See also:
 <code>plan.md</code>, <code>docs/EXTENDING.md</code>, and the project
 guide <code>AGENTS.md</code> for contributors.</p>
 

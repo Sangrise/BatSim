@@ -142,7 +142,7 @@ class CycleStepsDialog(QDialog):
             "하나라도 만족하면 다음 단계로 넘어갑니다. 빈 칸은 "
             "‘조건 없음’을 뜻합니다.")
         info.setWordWrap(True)
-        info.setStyleSheet("color:#888;")
+        info.setStyleSheet("color:#aeb8bf;")
         v.addWidget(info)
 
         # Top bar: per-cell V toggle + N series spinner

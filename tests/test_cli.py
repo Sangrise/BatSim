@@ -81,6 +81,15 @@ def test_cli_run_json(capsys):
     assert '"final_voltages"' in out
 
 
+def test_cli_run_auto_time_settings(capsys):
+    proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
+    rc, out = run_cli(["run", str(proj), "--json"], capsys)
+    assert rc == 0
+    assert '"kind": "transient"' in out
+    assert '"t_end": 60.0' in out
+    assert '"steps": 61' in out
+
+
 def test_cli_inspect_json(capsys):
     proj = Path(__file__).parents[1] / "assets" / "examples" / "battery_discharge.batsim"
     rc, out = run_cli(["inspect", str(proj), "--json"], capsys)
