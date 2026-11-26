@@ -605,4 +605,6 @@ modelling, place a TR on the AC side; the v1 PCS still couples node
 *Last updated together with the current manual revision. Bump this
 file whenever architecture or invariants change.*
 
+## GitHub Releases 배포
 
+- 배포용 별도 체크섬 파일(`.sha256`, `SHA256SUMS` 등)은 생성하거나 GitHub Releases에 첨부하지 않습니다.
